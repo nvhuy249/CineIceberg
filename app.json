@@ -1,19 +1,28 @@
 {
   "expo": {
     "name": "CineIceberg",
-    "slug": "CineIceberg",
+    "slug": "cineiceberg",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
     "scheme": "cineiceberg",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.vuhuynguyen.cineiceberg",
+      "buildNumber": "1",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.vuhuynguyen.cineiceberg",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
