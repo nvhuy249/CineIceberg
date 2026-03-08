@@ -68,8 +68,8 @@ export default function MovieDetailScreen() {
                 {film.runtimeMinutes} min | {film.year}
               </Text>
               <CTAButton
-                label="Add to Watchlist"
-                onPress={() => router.push("/watchlist" as Href)}
+                label="Add to Watchlists"
+                onPress={() => router.push("/(tabs)/watchlists" as Href)}
               />
             </View>
           </View>

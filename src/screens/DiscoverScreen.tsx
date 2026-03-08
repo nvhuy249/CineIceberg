@@ -22,7 +22,7 @@ export default function DiscoverScreen() {
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState(0);
   const [passed, setPassed] = useState(0);
-  const [history, setHistory] = useState<number[]>([]);
+  const [, setHistory] = useState<number[]>([]);
 
   const currentFilm = discoverQueue[index];
   const remaining = Math.max(discoverQueue.length - index, 0);

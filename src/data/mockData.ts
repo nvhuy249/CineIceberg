@@ -1,4 +1,5 @@
 import type { Film } from "@/src/types/film";
+import type { Watchlist } from "@/src/types/watchlist";
 
 export const films: Film[] = [
   {
@@ -145,6 +146,60 @@ export const films: Film[] = [
       { id: "essay", title: "Ambiguity Explained" },
     ],
   },
+  {
+    id: "severance",
+    title: "Severance",
+    year: 2022,
+    runtimeMinutes: 510,
+    director: "Dan Erickson",
+    genres: ["Series", "Sci-Fi", "Psychological"],
+    matchScore: 92,
+    posterColor: "#3d5668",
+    synopsis:
+      "Office employees undergo a procedure that splits work memories from personal life, revealing a disturbing system.",
+    analysis:
+      "Controlled tension, existential themes, and cold visual design align with viewers who enjoy cerebral mystery.",
+    videos: [
+      { id: "trailer", title: "Season Trailer" },
+      { id: "analysis", title: "Lore Breakdown" },
+    ],
+  },
+  {
+    id: "dark",
+    title: "Dark",
+    year: 2017,
+    runtimeMinutes: 1560,
+    director: "Baran bo Odar",
+    genres: ["Series", "Mystery", "Slow Burn"],
+    matchScore: 90,
+    posterColor: "#3f4b3a",
+    synopsis:
+      "A small town's missing-child case exposes a knot of timelines and family secrets across generations.",
+    analysis:
+      "Dense plotting and atmospheric dread make this a strong fit for puzzle-box viewers.",
+    videos: [
+      { id: "trailer", title: "Official Trailer" },
+      { id: "guide", title: "Character Guide" },
+    ],
+  },
+  {
+    id: "the-bear",
+    title: "The Bear",
+    year: 2022,
+    runtimeMinutes: 540,
+    director: "Christopher Storer",
+    genres: ["Series", "Drama", "Character Study"],
+    matchScore: 88,
+    posterColor: "#6b4e3b",
+    synopsis:
+      "A young chef returns home to run his family's restaurant while balancing grief, chaos, and ambition.",
+    analysis:
+      "High-intensity direction and emotional realism appeal to viewers who value character-driven storytelling.",
+    videos: [
+      { id: "trailer", title: "Season Trailer" },
+      { id: "featurette", title: "Cast Featurette" },
+    ],
+  },
 ];
 
 export const featuredFilmId = "parasite";
@@ -159,14 +214,16 @@ export const onboardingPickIds = [
   "drive",
   "aftersun",
   "burning",
+  "severance",
+  "dark",
 ];
-export const watchlistIds = ["arrival", "the-handmaiden", "aftersun"];
 export const discoverQueueIds = [
   "drive",
   "burning",
   "moonlight",
   "parasite",
   "blade-runner-2049",
+  "severance",
 ];
 
 export const tasteTags = [
@@ -185,8 +242,31 @@ export const featuredFilm = getFilmById(featuredFilmId) ?? films[0];
 export const hiddenGems = getFilmsByIds(hiddenGemIds);
 export const trending = getFilmsByIds(trendingIds);
 export const onboardingPicks = getFilmsByIds(onboardingPickIds);
-export const watchlistFilms = getFilmsByIds(watchlistIds);
 export const discoverQueue = getFilmsByIds(discoverQueueIds);
+
+export const initialWatchlists: Watchlist[] = [
+  {
+    id: "mind-bending-sci-fi",
+    name: "Mind-Bending Sci-Fi",
+    description: "Big concepts, existential tension, and polished visuals.",
+    filmIds: ["arrival", "blade-runner-2049", "severance"],
+    createdAt: "2026-02-10T08:00:00.000Z",
+  },
+  {
+    id: "twists-and-tension",
+    name: "Twists & Tension",
+    description: "Layered thrillers with sharp turns and moral pressure.",
+    filmIds: ["parasite", "the-handmaiden", "burning"],
+    createdAt: "2026-02-12T08:00:00.000Z",
+  },
+  {
+    id: "quiet-character-stories",
+    name: "Quiet Character Stories",
+    description: "Emotion-first films and series with intimate arcs.",
+    filmIds: ["moonlight", "aftersun", "the-bear"],
+    createdAt: "2026-02-14T08:00:00.000Z",
+  },
+];
 
 export const searchFilms = (query: string) => {
   const normalized = query.trim().toLowerCase();
