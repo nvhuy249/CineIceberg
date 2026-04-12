@@ -54,6 +54,27 @@ export const COLORS = {
     danger: "#f09aa4",
     info: "#8fb8e6",
   },
+  theater: {
+    curtain: "#5a0f17",
+    curtainDeep: "#2f060b",
+    curtainShadow: "#1d0408",
+    curtainHighlight: "#7e1a24",
+    stage: "#170d0f",
+    stageEdge: "#2b171b",
+    spotlight: "#f2d59b",
+    marqueeGold: "#e8be74",
+  },
+} as const;
+
+export const THEATER_THEME = {
+  curtainStripeOpacity: 0.18,
+  curtainGlowOpacity: 0.22,
+  stageLightOpacity: 0.16,
+  backdrop: {
+    top: "#2a0a10",
+    middle: "#14090c",
+    bottom: "#080809",
+  },
 } as const;
 
 export const TYPOGRAPHY = {
@@ -115,11 +136,11 @@ export const BORDER_RADIUS = {
   none: 0,
   sm: 6,
   md: 8,
-  lg: 12,
-  xl: 16,
+  lg: 10,
+  xl: 14,
   pill: 999,
-  button: 10,
-  card: 12,
+  button: 9,
+  card: 8,
 } as const;
 
 export const SHADOWS = {
@@ -156,6 +177,13 @@ export const SHADOWS = {
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.28,
     shadowRadius: 14,
+    elevation: 0,
+  },
+  theaterSpotlight: {
+    shadowColor: COLORS.theater.spotlight,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
     elevation: 0,
   },
 } as const;
@@ -332,6 +360,7 @@ export const DESIGN_TOKENS = {
   TASTE_TAG_VARIANTS,
   MATCH_SCORE_COLORS,
   ICEBERG_LOGO,
+  THEATER_THEME,
   withOpacity,
   getMatchScoreColors,
 } as const;

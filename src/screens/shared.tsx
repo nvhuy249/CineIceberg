@@ -6,7 +6,7 @@ import {
   COLORS,
   SPACING,
   TYPOGRAPHY,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 
 export function SectionTitle({
   title,

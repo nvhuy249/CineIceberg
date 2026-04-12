@@ -7,7 +7,7 @@ import {
   COLORS,
   SPACING,
   TYPOGRAPHY,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 import EmptyState from "@/src/components/EmptyState";
 import { MovieDetailSkeleton } from "@/src/components/LoadingSkeletons";

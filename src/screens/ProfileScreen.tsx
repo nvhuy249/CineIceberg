@@ -66,6 +66,16 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </View>
+
+      <View style={screenStyles.section}>
+        <SectionTitle title="Hidden Iceberg" subtitle="Direct access to hidden recommendations" />
+        <View style={screenStyles.card}>
+          <Text style={screenStyles.mutedText}>
+            If the scroll gesture is inconsistent on your device, open Hidden Iceberg directly.
+          </Text>
+          <CTAButton label="Open Hidden Iceberg" onPress={() => router.push("/iceberg" as Href)} />
+        </View>
+      </View>
     </AppScreen>
   );
 }

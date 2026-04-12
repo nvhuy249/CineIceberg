@@ -5,7 +5,7 @@ import {
   SPACING,
   TASTE_TAG_VARIANTS,
   TYPOGRAPHY,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 
 type TasteTagProps = {
   label: string;

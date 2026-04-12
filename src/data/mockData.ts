@@ -246,11 +246,26 @@ export const discoverQueue = getFilmsByIds(discoverQueueIds);
 
 export const initialWatchlists: Watchlist[] = [
   {
+    id: "discover-watchlist",
+    name: "Discover",
+    description: "Liked from swipe mode.",
+    filmIds: [],
+    createdAt: "2026-02-08T08:00:00.000Z",
+    updatedAt: "2026-02-08T08:00:00.000Z",
+    accent: "#5f748d",
+    emoji: "DISC",
+    layoutSize: "standard",
+  },
+  {
     id: "mind-bending-sci-fi",
     name: "Mind-Bending Sci-Fi",
     description: "Big concepts, existential tension, and polished visuals.",
     filmIds: ["arrival", "blade-runner-2049", "severance"],
     createdAt: "2026-02-10T08:00:00.000Z",
+    updatedAt: "2026-02-18T08:00:00.000Z",
+    accent: "#6f8ead",
+    emoji: "ICE",
+    layoutSize: "tall",
   },
   {
     id: "twists-and-tension",
@@ -258,6 +273,10 @@ export const initialWatchlists: Watchlist[] = [
     description: "Layered thrillers with sharp turns and moral pressure.",
     filmIds: ["parasite", "the-handmaiden", "burning"],
     createdAt: "2026-02-12T08:00:00.000Z",
+    updatedAt: "2026-02-19T08:00:00.000Z",
+    accent: "#9f6d72",
+    emoji: "NOIR",
+    layoutSize: "standard",
   },
   {
     id: "quiet-character-stories",
@@ -265,6 +284,10 @@ export const initialWatchlists: Watchlist[] = [
     description: "Emotion-first films and series with intimate arcs.",
     filmIds: ["moonlight", "aftersun", "the-bear"],
     createdAt: "2026-02-14T08:00:00.000Z",
+    updatedAt: "2026-02-20T08:00:00.000Z",
+    accent: "#8e7b62",
+    emoji: "SOFT",
+    layoutSize: "compact",
   },
 ];
 

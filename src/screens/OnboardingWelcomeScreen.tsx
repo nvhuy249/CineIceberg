@@ -7,7 +7,7 @@ import {
   SPACING,
   TYPOGRAPHY,
   withOpacity,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 
 import { CTAButton, screenStyles } from "./shared";

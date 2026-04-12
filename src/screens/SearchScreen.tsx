@@ -1,16 +1,16 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
   BORDER_RADIUS,
   COLORS,
   SPACING,
   TYPOGRAPHY,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
+import ConnectedFilmRowCard from "@/src/components/ConnectedFilmRowCard";
 import EmptyState from "@/src/components/EmptyState";
-import FilmCard from "@/src/components/FilmCard";
 import { SearchSkeleton } from "@/src/components/LoadingSkeletons";
 import { searchFilms } from "@/src/data/mockData";
 import type { Film } from "@/src/types/film";
@@ -70,7 +70,21 @@ export default function SearchScreen() {
 
       {!loading &&
         results.map((film) => (
-          <FilmCard key={film.id} film={film} onPress={() => openFilm(film)} />
+          <ConnectedFilmRowCard
+            key={film.id}
+            film={film}
+            onOpenFilm={() => openFilm(film)}
+            rightContent={
+              <>
+                <Text style={styles.description} numberOfLines={4}>
+                  {film.synopsis}
+                </Text>
+                <Text style={styles.metaDetails} numberOfLines={2}>
+                  {film.director} | {film.runtimeMinutes} min | {film.genres.slice(0, 3).join(" · ")}
+                </Text>
+              </>
+            }
+          />
         ))}
     </AppScreen>
   );
@@ -89,5 +103,15 @@ const styles = StyleSheet.create({
     color: COLORS.foreground.primary,
     fontSize: TYPOGRAPHY.fontSize.md,
     minHeight: 22,
+  },
+  description: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  metaDetails: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
   },
 });

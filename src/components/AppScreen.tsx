@@ -1,14 +1,21 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ScrollView,
+  type ScrollViewProps,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { COLORS, SPACING, TYPOGRAPHY } from "@/app/constants/designTokens";
+import { COLORS, SPACING, TYPOGRAPHY } from "@/src/constants/designTokens";
 
 type AppScreenProps = PropsWithChildren<{
   title: string;
   subtitle?: string;
   headerRight?: ReactNode;
   scroll?: boolean;
+  scrollProps?: Omit<ScrollViewProps, "children">;
 }>;
 
 export default function AppScreen({
@@ -16,6 +23,7 @@ export default function AppScreen({
   subtitle,
   headerRight,
   scroll = true,
+  scrollProps,
   children,
 }: AppScreenProps) {
   const content = (
@@ -35,8 +43,11 @@ export default function AppScreen({
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       {scroll ? (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          {...scrollProps}
+          contentContainerStyle={[styles.scrollContent, scrollProps?.contentContainerStyle]}
+          showsVerticalScrollIndicator={
+            scrollProps?.showsVerticalScrollIndicator ?? false
+          }
         >
           {content}
         </ScrollView>

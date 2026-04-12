@@ -7,7 +7,7 @@ import {
   COLORS,
   SPACING,
   TYPOGRAPHY,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 import FilmCard from "@/src/components/FilmCard";
 import { onboardingPicks } from "@/src/data/mockData";

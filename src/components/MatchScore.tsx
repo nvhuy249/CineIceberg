@@ -5,7 +5,7 @@ import {
   SPACING,
   TYPOGRAPHY,
   getMatchScoreColors,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 
 type MatchScoreProps = {
   score: number;

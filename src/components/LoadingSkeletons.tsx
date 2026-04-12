@@ -5,7 +5,7 @@ import {
   COLORS,
   SPACING,
   withOpacity,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 
 function SkeletonBlock({
   height,

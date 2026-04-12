@@ -6,7 +6,7 @@ import {
   SPACING,
   TYPOGRAPHY,
   withOpacity,
-} from "@/app/constants/designTokens";
+} from "@/src/constants/designTokens";
 import type { Film } from "@/src/types/film";
 
 import MatchScore from "./MatchScore";
@@ -29,21 +29,30 @@ export default function FilmCard({
   selected = false,
   compact = false,
 }: FilmCardProps) {
+  const swipeVariant = variant === "swipe";
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         variantStyles[variant],
+        swipeVariant && styles.cardSwipe,
         selected && styles.cardSelected,
         pressed && styles.cardPressed,
       ]}
     >
-      <View style={[styles.poster, { backgroundColor: film.posterColor }]} />
-      <View style={styles.body}>
+      <View
+        style={[
+          styles.poster,
+          swipeVariant && styles.posterSwipe,
+          { backgroundColor: film.posterColor },
+        ]}
+      />
+      <View style={[styles.body, swipeVariant && styles.bodySwipe]}>
         <View style={styles.header}>
           <View style={styles.titleWrap}>
-            <Text style={styles.title} numberOfLines={compact ? 1 : 2}>
+            <Text style={[styles.title, swipeVariant && styles.titleSwipe]} numberOfLines={compact ? 1 : 2}>
               {film.title}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
@@ -105,16 +114,26 @@ const styles = StyleSheet.create({
   cardPressed: {
     opacity: 0.92,
   },
+  cardSwipe: {
+    borderColor: withOpacity(COLORS.theater.marqueeGold, 0.3),
+    backgroundColor: withOpacity(COLORS.theater.stage, 0.5),
+  },
   poster: {
     width: "100%",
     height: 160,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
   },
+  posterSwipe: {
+    height: 220,
+  },
   body: {
     padding: SPACING.padding.card,
     gap: SPACING.sm,
     flex: 1,
+  },
+  bodySwipe: {
+    gap: SPACING.md,
   },
   header: {
     gap: SPACING.sm,
@@ -126,6 +145,9 @@ const styles = StyleSheet.create({
     color: COLORS.foreground.primary,
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  titleSwipe: {
+    fontSize: TYPOGRAPHY.fontSize.lg,
   },
   meta: {
     color: COLORS.foreground.secondary,
