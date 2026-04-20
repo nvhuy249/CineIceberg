@@ -35,12 +35,13 @@ export default function TasteTag({
 const styles = StyleSheet.create({
   tag: {
     borderWidth: 1,
-    borderRadius: BORDER_RADIUS.pill,
+    borderRadius: BORDER_RADIUS.lg,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     alignSelf: "flex-start",
   },
   text: {
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
   },

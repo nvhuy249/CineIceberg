@@ -1,13 +1,7 @@
 import { useRouter, type Href } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 
-import {
-  BORDER_RADIUS,
-  COLORS,
-  SPACING,
-  TYPOGRAPHY,
-  withOpacity,
-} from "@/src/constants/designTokens";
+import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY, withOpacity } from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 
 import { CTAButton, screenStyles } from "./shared";
@@ -23,8 +17,12 @@ export default function OnboardingWelcomeScreen() {
     >
       <View style={styles.fill}>
         <View style={[screenStyles.card, styles.hero]}>
-          <View style={styles.logoOrb}>
-            <View style={styles.logoCap} />
+          <View style={styles.logoWrap}>
+            <Image
+              source={require("../../assets/images/icon.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.tagline}>
             Discover films that match your taste, not just what is trending.
@@ -53,7 +51,7 @@ const styles = StyleSheet.create({
   hero: {
     gap: SPACING.md,
   },
-  logoOrb: {
+  logoWrap: {
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -63,14 +61,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoCap: {
-    width: 34,
-    height: 20,
-    borderTopLeftRadius: BORDER_RADIUS.lg,
-    borderTopRightRadius: BORDER_RADIUS.lg,
-    borderWidth: 2,
-    borderBottomWidth: 0,
-    borderColor: COLORS.accent.crystal,
+  logoImage: {
+    width: 56,
+    height: 56,
+    borderRadius: BORDER_RADIUS.sm,
   },
   tagline: {
     color: COLORS.foreground.primary,

@@ -1,9 +1,15 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs, type Href } from "expo-router";
 
 import { COLORS } from "@/src/constants/designTokens";
+import { useAuth } from "@/src/context/AuthContext";
 
 export default function TabsLayout() {
+  const { session, isInitializing } = useAuth();
+
+  if (isInitializing) return null;
+  if (!session) return <Redirect href={"/auth" as Href} />;
+
   return (
     <Tabs
       screenOptions={{

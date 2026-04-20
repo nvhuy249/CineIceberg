@@ -1,0 +1,2 @@
+-- Optional seed data for local development.
+-- Keep empty for now; add insert statements when you need predictable test fixtures.

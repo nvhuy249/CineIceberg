@@ -44,6 +44,7 @@ export function CTAButton({
         {
           backgroundColor: theme.bg,
           borderColor: theme.border,
+          borderWidth: theme.border === "transparent" ? 0 : 1,
           opacity: disabled ? 0.45 : pressed ? 0.92 : 1,
         },
       ]}
@@ -77,11 +78,13 @@ export const screenStyles = StyleSheet.create({
   },
   mutedText: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
   },
   bodyText: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
   },
@@ -93,22 +96,25 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.lg,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   sectionSubtitle: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
   },
   button: {
-    minHeight: 42,
+    minHeight: 40,
     borderRadius: BORDER_RADIUS.button,
-    borderWidth: 1,
+    borderWidth: 0,
     paddingHorizontal: SPACING.xl,
     justifyContent: "center",
     alignItems: "center",
   },
   buttonText: {
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
   },

@@ -1,8 +1,10 @@
 import { useRouter, type Href } from "expo-router";
+import { useState } from "react";
 import { Text, View } from "react-native";
 
 import AppScreen from "@/src/components/AppScreen";
 import TasteTag from "@/src/components/TasteTag";
+import { useAuth } from "@/src/context/AuthContext";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { tasteTags } from "@/src/data/mockData";
 
@@ -10,7 +12,10 @@ import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
   const { watchlists } = useWatchlists();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const totalSavedTitles = watchlists.reduce(
     (total, watchlist) => total + watchlist.filmIds.length,
@@ -28,11 +33,29 @@ export default function ProfileScreen() {
       <View style={screenStyles.section}>
         <SectionTitle title="Account" subtitle="Personal profile" />
         <View style={screenStyles.card}>
-          <Text style={screenStyles.bodyText}>Name: Cine Iceberg User</Text>
+          <Text style={screenStyles.bodyText}>
+            Name: {user?.user_metadata?.display_name ?? "Cine Iceberg User"}
+          </Text>
+          <Text style={screenStyles.bodyText}>Email: {user?.email ?? "Not available"}</Text>
           <Text style={screenStyles.bodyText}>Plan: Free Preview</Text>
           <Text style={screenStyles.mutedText}>
             Recommendation tuning is based on your watchlists, likes, and skips.
           </Text>
+          {signOutError ? <Text style={screenStyles.mutedText}>{signOutError}</Text> : null}
+          <CTAButton
+            label={signingOut ? "Signing Out..." : "Sign Out"}
+            disabled={signingOut}
+            variant="ghost"
+            onPress={() => {
+              void (async () => {
+                setSigningOut(true);
+                setSignOutError(null);
+                const { error } = await signOut();
+                if (error) setSignOutError(error);
+                setSigningOut(false);
+              })();
+            }}
+          />
         </View>
       </View>
 

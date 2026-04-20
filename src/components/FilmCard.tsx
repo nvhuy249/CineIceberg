@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.md,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
@@ -151,6 +152,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.xs,
   },
   tagsRow: {
@@ -160,6 +162,7 @@ const styles = StyleSheet.create({
   },
   synopsis: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
   },

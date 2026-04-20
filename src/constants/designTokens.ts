@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -79,7 +81,11 @@ export const THEATER_THEME = {
 
 export const TYPOGRAPHY = {
   fontFamily: {
-    sans: "System",
+    sans: Platform.select({
+      ios: "Avenir Next",
+      android: "sans-serif",
+      default: "System",
+    }),
     mono: "Menlo",
   },
   fontSize: {
@@ -134,13 +140,13 @@ export const SPACING = {
 
 export const BORDER_RADIUS = {
   none: 0,
-  sm: 6,
-  md: 8,
-  lg: 10,
-  xl: 14,
-  pill: 999,
-  button: 9,
-  card: 8,
+  sm: 4,
+  md: 6,
+  lg: 8,
+  xl: 10,
+  pill: 12,
+  button: 6,
+  card: 6,
 } as const;
 
 export const SHADOWS = {
@@ -153,17 +159,17 @@ export const SHADOWS = {
   },
   sm: {
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.16,
+    shadowRadius: 2,
+    elevation: 1,
   },
   md: {
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
   },
   iceGlowSm: {
     shadowColor: COLORS.accent.iceBlue,
@@ -182,8 +188,8 @@ export const SHADOWS = {
   theaterSpotlight: {
     shadowColor: COLORS.theater.spotlight,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.32,
-    shadowRadius: 18,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
     elevation: 0,
   },
 } as const;
@@ -270,21 +276,21 @@ export const BUTTON_VARIANTS = {
   primary: {
     bg: COLORS.accent.iceBlue,
     text: COLORS.foreground.inverse,
-    border: "transparent",
+    border: withOpacity(COLORS.accent.frost, 0.4),
     hover: COLORS.accent.frost,
     active: withOpacity(COLORS.accent.iceBlue, 0.86),
   },
   secondary: {
-    bg: COLORS.background.elevated,
+    bg: withOpacity(COLORS.background.subtle, 0.9),
     text: COLORS.foreground.primary,
     border: COLORS.border.default,
-    hover: COLORS.background.subtle,
-    active: withOpacity(COLORS.background.subtle, 0.92),
+    hover: withOpacity(COLORS.background.subtle, 0.95),
+    active: withOpacity(COLORS.background.subtle, 1),
   },
   ghost: {
     bg: "transparent",
     text: COLORS.foreground.primary,
-    border: COLORS.border.default,
+    border: withOpacity(COLORS.foreground.primary, 0.12),
     hover: withOpacity(COLORS.accent.iceBlue, 0.08),
     active: withOpacity(COLORS.accent.iceBlue, 0.16),
   },

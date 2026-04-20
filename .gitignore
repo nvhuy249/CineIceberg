@@ -31,7 +31,9 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -41,3 +43,10 @@ app-example
 # generated native folders
 /ios
 /android
+
+# local-only planning/docs (do not publish)
+ARCHITECTURE.md
+DESIGN_CONSTANTS_CHEATSHEET.md
+DESIGN_TOKENS_GUIDE.md
+VISUAL_STYLE_GUIDE.md
+PRE_PRODUCTION_CHECKLIST.md

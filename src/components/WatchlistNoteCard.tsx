@@ -109,11 +109,13 @@ const styles = StyleSheet.create({
   },
   count: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
   title: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     lineHeight: TYPOGRAPHY.lineHeight.tight,
@@ -126,7 +128,7 @@ const styles = StyleSheet.create({
   tag: {
     paddingHorizontal: SPACING.sm,
     minHeight: 24,
-    borderRadius: BORDER_RADIUS.pill,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border.default,
     backgroundColor: withOpacity(COLORS.background.primary, 0.45),
@@ -134,6 +136,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.medium,
   },

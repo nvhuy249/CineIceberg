@@ -21,6 +21,7 @@
     "android": {
       "package": "com.vuhuynguyen.cineiceberg",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#1E252C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"

@@ -87,12 +87,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.foreground.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.xl,
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     letterSpacing: TYPOGRAPHY.letterSpacing.tight,
   },
   subtitle: {
     color: COLORS.foreground.secondary,
+    fontFamily: TYPOGRAPHY.fontFamily.sans,
     fontSize: TYPOGRAPHY.fontSize.sm,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
   },

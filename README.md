@@ -16,6 +16,18 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+3. Configure Supabase auth env vars by creating `.env` from `.env.example`.
+
+   Then set:
+   - `EXPO_PUBLIC_SUPABASE_URL`
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+
+4. Restart Expo after changing `.env`.
+
+## Planning
+
+- Pre-production tasks are tracked in `PRE_PRODUCTION_CHECKLIST.md`.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
