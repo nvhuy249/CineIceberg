@@ -19,7 +19,7 @@ import {
 import AppScreen from "@/src/components/AppScreen";
 import EmptyState from "@/src/components/EmptyState";
 import WatchlistNoteCard from "@/src/components/WatchlistNoteCard";
-import { getFilmsByIds } from "@/src/data/mockData";
+import { getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
 
@@ -27,16 +27,20 @@ import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
 export default function WatchlistsScreen() {
   const router = useRouter();
-  const { watchlists, createWatchlist } = useWatchlists();
+  const { watchlists, createWatchlist, isLoading } = useWatchlists();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateWatchlist = () => {
-    const created = createWatchlist(name, description);
+  const handleCreateWatchlist = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    const created = await createWatchlist(name, description);
+    setIsCreating(false);
     if (!created) {
-      setError("Name is required.");
+      setError(name.trim() ? "Could not create watchlist. Please try again." : "Name is required.");
       return;
     }
 
@@ -100,7 +104,11 @@ export default function WatchlistsScreen() {
       <View style={screenStyles.section}>
         <SectionTitle
           title="Your Watchlists"
-          subtitle={`${watchlists.length} total watchlists arranged as notes`}
+          subtitle={
+            isLoading
+              ? "Loading your watchlists..."
+              : `${watchlists.length} total watchlists arranged as notes`
+          }
         />
         {watchlists.length === 0 ? (
           <EmptyState
@@ -112,7 +120,7 @@ export default function WatchlistsScreen() {
             {boardColumns.map((column, columnIndex) => (
               <View key={`column-${columnIndex}`} style={styles.column}>
                 {column.map((watchlist) => {
-                  const previewFilms = getFilmsByIds(watchlist.filmIds).slice(0, 4);
+                  const previewFilms = getFilmsByTmdbIds(watchlist.filmIds).slice(0, 4);
                   const aesthetics = Array.from(
                     new Set(
                       previewFilms.flatMap((film) => film.genres).filter((genre) => genre !== "Series"),
@@ -169,7 +177,13 @@ export default function WatchlistsScreen() {
               style={styles.input}
             />
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <CTAButton label="Create" onPress={handleCreateWatchlist} />
+            <CTAButton
+              label={isCreating ? "Creating..." : "Create"}
+              onPress={() => {
+                void handleCreateWatchlist();
+              }}
+              disabled={isCreating}
+            />
           </View>
         </View>
       </Modal>

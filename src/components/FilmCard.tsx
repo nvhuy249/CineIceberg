@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -48,7 +49,16 @@ export default function FilmCard({
           swipeVariant && styles.posterSwipe,
           { backgroundColor: film.posterColor },
         ]}
-      />
+      >
+        {film.posterUrl ? (
+          <Image
+            source={{ uri: film.posterUrl }}
+            style={styles.posterImage}
+            contentFit="cover"
+            transition={120}
+          />
+        ) : null}
+      </View>
       <View style={[styles.body, swipeVariant && styles.bodySwipe]}>
         <View style={styles.header}>
           <View style={styles.titleWrap}>
@@ -123,6 +133,10 @@ const styles = StyleSheet.create({
     height: 160,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
+    overflow: "hidden",
+  },
+  posterImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   posterSwipe: {
     height: 220,

@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -20,6 +21,14 @@ export default function HomeRailCard({ film, onPress }: HomeRailCardProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={[styles.poster, { backgroundColor: film.posterColor }]}>
+        {film.posterUrl ? (
+          <Image
+            source={{ uri: film.posterUrl }}
+            style={styles.posterImage}
+            contentFit="cover"
+            transition={120}
+          />
+        ) : null}
         <View style={styles.matchWrap}>
           <MatchScore score={film.matchScore} />
         </View>
@@ -55,6 +64,10 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "flex-end",
     padding: SPACING.sm,
+    overflow: "hidden",
+  },
+  posterImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   matchWrap: {
     alignSelf: "flex-end",

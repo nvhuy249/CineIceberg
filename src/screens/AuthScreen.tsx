@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
   },
   successBackdrop: {
     flex: 1,
-    backgroundColor: withOpacity(COLORS.background.overlay, 0.9),
+    backgroundColor: withOpacity(COLORS.background.primary, 0.9),
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: SPACING.padding.page,

@@ -1,19 +1,24 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { useEffect, useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
   BORDER_RADIUS,
   COLORS,
   SPACING,
   TYPOGRAPHY,
+  withOpacity,
 } from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 import EmptyState from "@/src/components/EmptyState";
 import { MovieDetailSkeleton } from "@/src/components/LoadingSkeletons";
 import MatchScore from "@/src/components/MatchScore";
 import TasteTag from "@/src/components/TasteTag";
+import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { getFilmById } from "@/src/data/mockData";
+import { fetchFilmDetailByRouteId } from "@/src/lib/tmdb";
+import type { Film } from "@/src/types/film";
 
 import { CTAButton, screenStyles } from "./shared";
 
@@ -23,17 +28,79 @@ const tabs: DetailTab[] = ["overview", "analysis", "videos"];
 
 export default function MovieDetailScreen() {
   const router = useRouter();
+  const { watchlists, addFilmToWatchlist } = useWatchlists();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [loading, setLoading] = useState(true);
+  const [film, setFilm] = useState<Film | null>(null);
+  const [showWatchlistPicker, setShowWatchlistPicker] = useState(false);
+  const [isAddingWatchlistId, setIsAddingWatchlistId] = useState<string | null>(null);
+  const [addFeedback, setAddFeedback] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 250);
-    return () => clearTimeout(timer);
+    setAddFeedback(null);
+
+    const loadFilm = async () => {
+      if (!id) {
+        if (!active) return;
+        setFilm(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const remoteFilm = await fetchFilmDetailByRouteId(id);
+        if (!active) return;
+        setFilm(remoteFilm ?? getFilmById(id) ?? null);
+      } catch {
+        if (!active) return;
+        setFilm(getFilmById(id) ?? null);
+      } finally {
+        if (!active) return;
+        setLoading(false);
+      }
+    };
+
+    void loadFilm();
+    return () => {
+      active = false;
+    };
   }, [id]);
 
-  const film = useMemo(() => (id ? getFilmById(id) : undefined), [id]);
+  const openWatchlistPicker = () => {
+    if (!film) return;
+    setAddFeedback(null);
+    setShowWatchlistPicker(true);
+  };
+
+  const closeWatchlistPicker = () => {
+    if (isAddingWatchlistId) return;
+    setShowWatchlistPicker(false);
+  };
+
+  const handleAddToWatchlist = async (watchlistId: string) => {
+    if (!film || isAddingWatchlistId) return;
+
+    setIsAddingWatchlistId(watchlistId);
+    const added = await addFilmToWatchlist(
+      watchlistId,
+      film.tmdbId,
+      "manual",
+      film.mediaType,
+    );
+    setIsAddingWatchlistId(null);
+
+    if (added) {
+      setAddFeedback(`Added "${film.title}".`);
+      setShowWatchlistPicker(false);
+      return;
+    }
+
+    setAddFeedback(`"${film.title}" is already in that watchlist or could not be added.`);
+  };
 
   return (
     <AppScreen
@@ -56,7 +123,16 @@ export default function MovieDetailScreen() {
       {!loading && film ? (
         <>
           <View style={styles.heroCard}>
-            <View style={[styles.poster, { backgroundColor: film.posterColor }]} />
+            <View style={[styles.poster, { backgroundColor: film.posterColor }]}>
+              {film.posterUrl ? (
+                <Image
+                  source={{ uri: film.posterUrl }}
+                  style={styles.posterImage}
+                  contentFit="cover"
+                  transition={160}
+                />
+              ) : null}
+            </View>
             <View style={styles.heroBody}>
               <View style={screenStyles.wrapRow}>
                 <MatchScore score={film.matchScore} />
@@ -67,10 +143,8 @@ export default function MovieDetailScreen() {
               <Text style={screenStyles.mutedText}>
                 {film.runtimeMinutes} min | {film.year}
               </Text>
-              <CTAButton
-                label="Add to Watchlists"
-                onPress={() => router.push("/(tabs)/watchlists" as Href)}
-              />
+              <CTAButton label="Add to Watchlists" onPress={openWatchlistPicker} />
+              {addFeedback ? <Text style={styles.addFeedback}>{addFeedback}</Text> : null}
             </View>
           </View>
 
@@ -123,6 +197,60 @@ export default function MovieDetailScreen() {
           </View>
         </>
       ) : null}
+
+      <Modal
+        visible={showWatchlistPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={closeWatchlistPicker}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.backdropPressTarget} onPress={closeWatchlistPicker} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add to Watchlist</Text>
+              <Pressable onPress={closeWatchlistPicker} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>Close</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.modalSubtitle}>{film?.title}</Text>
+
+            {watchlists.length === 0 ? (
+              <EmptyState
+                title="No watchlists available"
+                message="Create a watchlist first, then add this title."
+                action={
+                  <CTAButton
+                    label="Open Watchlists"
+                    onPress={() => {
+                      closeWatchlistPicker();
+                      router.push("/(tabs)/watchlists" as Href);
+                    }}
+                  />
+                }
+              />
+            ) : (
+              <View style={styles.modalList}>
+                {watchlists.map((watchlist) => (
+                  <CTAButton
+                    key={watchlist.id}
+                    label={
+                      isAddingWatchlistId === watchlist.id
+                        ? `Adding to ${watchlist.name}...`
+                        : `${watchlist.name} (${watchlist.filmIds.length})`
+                    }
+                    variant="secondary"
+                    disabled={Boolean(isAddingWatchlistId)}
+                    onPress={() => {
+                      void handleAddToWatchlist(watchlist.id);
+                    }}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
@@ -139,10 +267,19 @@ const styles = StyleSheet.create({
     height: 220,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
+    overflow: "hidden",
+  },
+  posterImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   heroBody: {
     padding: SPACING.padding.card,
     gap: SPACING.sm,
+  },
+  addFeedback: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
   },
   tabsRow: {
     flexDirection: "row",
@@ -175,5 +312,51 @@ const styles = StyleSheet.create({
     color: COLORS.foreground.secondary,
     fontSize: TYPOGRAPHY.fontSize.md,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: withOpacity(COLORS.background.primary, 0.72),
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.xl,
+  },
+  backdropPressTarget: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 440,
+    borderRadius: BORDER_RADIUS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    backgroundColor: COLORS.background.elevated,
+    padding: SPACING.padding.card,
+    gap: SPACING.sm,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.lg,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  modalSubtitle: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+  },
+  closeButton: {
+    minHeight: 30,
+    justifyContent: "center",
+    paddingHorizontal: SPACING.xs,
+  },
+  closeButtonText: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+  },
+  modalList: {
+    gap: SPACING.xs,
   },
 });

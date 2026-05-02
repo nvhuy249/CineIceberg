@@ -24,6 +24,32 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 4. Restart Expo after changing `.env`.
 
+## TMDB via Backend Proxy (Recommended)
+
+TMDB calls are routed through a Supabase Edge Function (`tmdb-proxy`) so the TMDB token is not exposed in the client bundle.
+
+1. Set TMDB secret on Supabase:
+
+   ```bash
+   supabase secrets set TMDB_READ_TOKEN=your_tmdb_read_access_token
+   ```
+
+2. Deploy the edge function:
+
+   ```bash
+   supabase functions deploy tmdb-proxy
+   ```
+
+3. (Optional local function dev)
+
+   ```bash
+   supabase functions serve tmdb-proxy --env-file .env
+   ```
+
+Notes:
+- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` stay in client env.
+- Do not put TMDB server token in `EXPO_PUBLIC_*` for production builds.
+
 ## Planning
 
 - Pre-production tasks are tracked in `PRE_PRODUCTION_CHECKLIST.md`.

@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -51,7 +52,16 @@ export default function WatchlistNoteCard({
                   : withOpacity(COLORS.background.subtle, 0.92),
               },
             ]}
-          />
+          >
+            {film?.posterUrl ? (
+              <Image
+                source={{ uri: film.posterUrl }}
+                style={styles.posterCellImage}
+                contentFit="cover"
+                transition={120}
+              />
+            ) : null}
+          </View>
         ))}
       </View>
 
@@ -93,6 +103,10 @@ const styles = StyleSheet.create({
   posterCell: {
     width: "50%",
     height: "50%",
+    overflow: "hidden",
+  },
+  posterCellImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   posterCellRightBorder: {
     borderRightWidth: 1,

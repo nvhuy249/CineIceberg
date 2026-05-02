@@ -1,5 +1,5 @@
 import { useRouter, type Href } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
@@ -11,31 +11,125 @@ import {
 import AppScreen from "@/src/components/AppScreen";
 import FilmCard from "@/src/components/FilmCard";
 import { onboardingPicks } from "@/src/data/mockData";
+import { useAuth } from "@/src/context/AuthContext";
+import { useWatchlists } from "@/src/context/WatchlistsContext";
+import { supabase } from "@/src/lib/supabase";
+import { fetchSearchResultsStrict } from "@/src/lib/tmdb";
+import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle } from "./shared";
 
+const MIN_SELECTION = 3;
+
 export default function OnboardingFilmsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { addFilmToDiscoverWatchlist } = useWatchlists();
   const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [results, setResults] = useState<Film[]>(onboardingPicks);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedByTmdbId, setSelectedByTmdbId] = useState<Record<number, Film>>({});
+
+  useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const nextResults = await fetchSearchResultsStrict(query);
+        if (!active) return;
+        setResults(nextResults);
+      } catch (error) {
+        if (!active) return;
+        console.warn("[Onboarding TMDB Search] request failed", { query, error });
+        setResults(query.trim() ? [] : onboardingPicks);
+      } finally {
+        if (!active) return;
+        setIsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return onboardingPicks;
+    if (!normalized) return results;
 
-    return onboardingPicks.filter((film) =>
+    return results.filter((film) =>
       `${film.title} ${film.director} ${film.genres.join(" ")}`
         .toLowerCase()
         .includes(normalized),
     );
-  }, [query]);
+  }, [query, results]);
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
-    );
+  const selectedFilms = useMemo(
+    () => Object.values(selectedByTmdbId),
+    [selectedByTmdbId],
+  );
+
+  const toggleSelection = (film: Film) => {
+    setSelectedByTmdbId((current) => {
+      const next = { ...current };
+      if (next[film.tmdbId]) {
+        delete next[film.tmdbId];
+        return next;
+      }
+      next[film.tmdbId] = film;
+      return next;
+    });
+  };
+
+  const handleContinue = async () => {
+    if (selectedFilms.length < MIN_SELECTION || isSaving) return;
+
+    setIsSaving(true);
+    setSubmitError(null);
+
+    const genreFrequency = new Map<string, number>();
+    selectedFilms.forEach((film) => {
+      film.genres.forEach((genre) => {
+        const normalized = genre.trim();
+        if (!normalized) return;
+        genreFrequency.set(normalized, (genreFrequency.get(normalized) ?? 0) + 1);
+      });
+    });
+
+    const tasteTags = [...genreFrequency.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([genre]) => genre)
+      .slice(0, 6);
+
+    try {
+      if (supabase && user) {
+        const { error } = await supabase.from("profiles").upsert(
+          {
+            user_id: user.id,
+            onboarding_completed: true,
+            taste_tags: tasteTags,
+          },
+          { onConflict: "user_id" },
+        );
+        if (error) throw error;
+      }
+
+      await Promise.all(
+        selectedFilms.map((film) => addFilmToDiscoverWatchlist(film.tmdbId)),
+      );
+
+      router.replace("/(tabs)" as Href);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Could not save onboarding picks. Please retry.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -52,16 +146,26 @@ export default function OnboardingFilmsScreen() {
           style={styles.searchInput}
         />
       </View>
+      {isLoading ? <Text style={styles.loadingText}>Searching TMDB...</Text> : null}
+      {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
 
       <View style={styles.counterRow}>
         <SectionTitle
-          title={`${selectedIds.length} selected`}
+          title={`${selectedFilms.length} selected`}
           subtitle="Need 3+ to continue"
         />
         <CTAButton
-          label={selectedIds.length >= 3 ? "Continue" : "Select 3+"}
-          disabled={selectedIds.length < 3}
-          onPress={() => router.replace("/(tabs)" as Href)}
+          label={
+            isSaving
+              ? "Saving..."
+              : selectedFilms.length >= MIN_SELECTION
+                ? "Continue"
+                : "Select 3+"
+          }
+          disabled={selectedFilms.length < MIN_SELECTION || isSaving}
+          onPress={() => {
+            void handleContinue();
+          }}
         />
       </View>
 
@@ -72,8 +176,8 @@ export default function OnboardingFilmsScreen() {
               film={film}
               variant="grid"
               compact
-              selected={selectedIds.includes(film.id)}
-              onPress={() => toggleSelection(film.id)}
+              selected={Boolean(selectedByTmdbId[film.tmdbId])}
+              onPress={() => toggleSelection(film)}
             />
           </View>
         ))}
@@ -104,6 +208,14 @@ const styles = StyleSheet.create({
   },
   counterRow: {
     gap: SPACING.md,
+  },
+  loadingText: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+  },
+  errorText: {
+    color: COLORS.status.danger,
+    fontSize: TYPOGRAPHY.fontSize.xs,
   },
   grid: {
     flexDirection: "row",

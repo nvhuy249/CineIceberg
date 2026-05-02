@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
   BORDER_RADIUS,
@@ -14,7 +14,7 @@ import ConnectedFilmRowCard from "@/src/components/ConnectedFilmRowCard";
 import EmptyState from "@/src/components/EmptyState";
 import HomeRailCard from "@/src/components/HomeRailCard";
 import TasteTag from "@/src/components/TasteTag";
-import { films, getFilmsByIds } from "@/src/data/mockData";
+import { films, getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
 import type { Film } from "@/src/types/film";
@@ -34,11 +34,14 @@ type RecommendationFeedback = "more" | "less";
 export default function WatchlistDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { watchlists, addFilmToWatchlist } = useWatchlists();
+  const { watchlists, addFilmToWatchlist, removeFilmFromWatchlist, deleteWatchlist } =
+    useWatchlists();
   const [refreshCount, setRefreshCount] = useState(0);
   const [boostedGenre, setBoostedGenre] = useState<string | null>(null);
   const [avoidedGenre, setAvoidedGenre] = useState<string | null>(null);
   const [focusFilmId, setFocusFilmId] = useState<string | null>(null);
+  const [isDeletingWatchlist, setIsDeletingWatchlist] = useState(false);
+  const [removingTmdbIds, setRemovingTmdbIds] = useState<number[]>([]);
   const [feedbackByFilmId, setFeedbackByFilmId] = useState<
     Record<string, RecommendationFeedback>
   >({});
@@ -49,7 +52,7 @@ export default function WatchlistDetailScreen() {
   );
 
   const savedFilms = useMemo(
-    () => (watchlist ? getFilmsByIds(watchlist.filmIds) : []),
+    () => (watchlist ? getFilmsByTmdbIds(watchlist.filmIds) : []),
     [watchlist],
   );
 
@@ -78,16 +81,59 @@ export default function WatchlistDetailScreen() {
       ({ pathname: "/movie/[id]", params: { id: filmId } } as unknown) as Href,
     );
 
-  const addRecommendationToWatchlist = (filmId: string) => {
+  const addRecommendationToWatchlist = async (filmId: string) => {
     if (!watchlist) return;
-    const added = addFilmToWatchlist(watchlist.id, filmId);
+    const film = films.find((item) => item.id === filmId);
+    if (!film) return;
+
+    const added = await addFilmToWatchlist(
+      watchlist.id,
+      film.tmdbId,
+      "recommendation",
+      film.mediaType,
+    );
     if (added) {
       trackEvent("recommendation_added", {
         source: "watchlist_recommendation",
         watchlist_id: watchlist.id,
-        film_id: filmId,
+        tmdb_id: film.tmdbId,
       });
     }
+  };
+
+  const handleRemoveFilm = async (film: Film) => {
+    if (!watchlist) return;
+    if (removingTmdbIds.includes(film.tmdbId)) return;
+
+    setRemovingTmdbIds((prev) => [...prev, film.tmdbId]);
+    await removeFilmFromWatchlist(watchlist.id, film.tmdbId, film.mediaType);
+    setRemovingTmdbIds((prev) => prev.filter((id) => id !== film.tmdbId));
+  };
+
+  const handleDeleteWatchlist = () => {
+    if (!watchlist || watchlist.isDefault || isDeletingWatchlist) return;
+
+    Alert.alert(
+      "Delete watchlist?",
+      `This will permanently remove "${watchlist.name}" and its saved titles.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setIsDeletingWatchlist(true);
+              const deleted = await deleteWatchlist(watchlist.id);
+              setIsDeletingWatchlist(false);
+              if (deleted) {
+                router.replace("/(tabs)/watchlists" as Href);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const applyFeedback = (film: Film, feedback: RecommendationFeedback) => {
@@ -140,6 +186,17 @@ export default function WatchlistDetailScreen() {
       subtitle={watchlist.description || `${watchlist.filmIds.length} saved titles`}
       headerRight={<CTAButton label="Back" variant="secondary" onPress={() => router.back()} />}
     >
+      {!watchlist.isDefault ? (
+        <View style={styles.deleteWatchlistWrap}>
+          <CTAButton
+            label={isDeletingWatchlist ? "Deleting..." : "Delete Watchlist"}
+            variant="destructive"
+            disabled={isDeletingWatchlist}
+            onPress={handleDeleteWatchlist}
+          />
+        </View>
+      ) : null}
+
       <View style={screenStyles.section}>
         <SectionTitle
           title="In This Watchlist"
@@ -161,6 +218,16 @@ export default function WatchlistDetailScreen() {
             {savedFilms.map((film) => (
               <View key={film.id} style={styles.savedGridItem}>
                 <HomeRailCard film={film} onPress={() => openFilm(film.id)} />
+                <View style={styles.savedItemAction}>
+                  <CTAButton
+                    label={removingTmdbIds.includes(film.tmdbId) ? "Removing..." : "Remove"}
+                    variant="secondary"
+                    disabled={removingTmdbIds.includes(film.tmdbId)}
+                    onPress={() => {
+                      void handleRemoveFilm(film);
+                    }}
+                  />
+                </View>
               </View>
             ))}
           </View>
@@ -217,7 +284,7 @@ export default function WatchlistDetailScreen() {
           />
         ) : (
           recommendations.map((recommendation) => {
-            const alreadySaved = watchlist.filmIds.includes(recommendation.film.id);
+            const alreadySaved = watchlist.filmIds.includes(recommendation.film.tmdbId);
             return (
               <ConnectedFilmRowCard
                 key={recommendation.film.id}
@@ -230,7 +297,9 @@ export default function WatchlistDetailScreen() {
                       label={alreadySaved ? "Already in Watchlist" : "Add to Watchlist"}
                       variant={alreadySaved ? "secondary" : "primary"}
                       disabled={alreadySaved}
-                      onPress={() => addRecommendationToWatchlist(recommendation.film.id)}
+                      onPress={() => {
+                        void addRecommendationToWatchlist(recommendation.film.id);
+                      }}
                     />
                     <View style={styles.feedbackRow}>
                       <PreferenceButton
@@ -264,7 +333,7 @@ function buildRecommendations({
   focusFilmId,
 }: {
   watchlistFilms: Film[];
-  excludedFilmIds: string[];
+  excludedFilmIds: number[];
   refreshCount: number;
   boostedGenre: string | null;
   avoidedGenre: string | null;
@@ -278,7 +347,7 @@ function buildRecommendations({
   });
 
   const ranked: Recommendation[] = films
-    .filter((film) => !excludedFilmIds.includes(film.id))
+    .filter((film) => !excludedFilmIds.includes(film.tmdbId))
     .map((film) => {
       const overlapGenres = film.genres.filter((genre) => genreFrequency.has(genre));
       const matchingDirectorFilm = watchlistFilms.find(
@@ -340,7 +409,7 @@ function buildReason({
   avoidedGenre: string | null;
 }) {
   const reasons: string[] = [];
-  const format = film.genres.includes("Series") ? "Series" : "Movie";
+  const format = film.mediaType === "tv" ? "Series" : "Movie";
 
   if (matchingDirectorFilm) {
     reasons.push(`same director as "${matchingDirectorFilm.title}"`);
@@ -397,6 +466,9 @@ function PreferenceButton({
 }
 
 const styles = StyleSheet.create({
+  deleteWatchlistWrap: {
+    alignSelf: "flex-start",
+  },
   recommendationsHeader: {
     flexDirection: "row",
     gap: SPACING.md,
@@ -415,6 +487,10 @@ const styles = StyleSheet.create({
   },
   savedGridItem: {
     width: 138,
+    gap: SPACING.xs,
+  },
+  savedItemAction: {
+    width: "100%",
   },
   tuningCard: {
     backgroundColor: withOpacity(COLORS.theater.stage, 0.38),

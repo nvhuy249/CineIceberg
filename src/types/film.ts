@@ -5,6 +5,9 @@ export type FilmVideo = {
 
 export type Film = {
   id: string;
+  tmdbId: number;
+  mediaType: "movie" | "tv";
+  posterUrl?: string | null;
   title: string;
   year: number;
   runtimeMinutes: number;

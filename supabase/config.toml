@@ -239,19 +239,19 @@ otp_expiry = 3600
 # Customize email templates
 [auth.email.template.confirmation]
 subject = "Confirm your CineIceberg account"
-content_path = "./templates/confirmation.html"
+content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.recovery]
 subject = "Reset your CineIceberg password"
-content_path = "./templates/recovery.html"
+content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.invite]
 subject = "You are invited to CineIceberg"
-content_path = "./templates/invite.html"
+content_path = "./supabase/templates/invite.html"
 
 [auth.email.template.email_change]
 subject = "Confirm your new CineIceberg email"
-content_path = "./templates/email_change.html"
+content_path = "./supabase/templates/email_change.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

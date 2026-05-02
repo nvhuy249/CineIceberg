@@ -1,4 +1,5 @@
 import { useRouter, type Href } from "expo-router";
+import { Image } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -25,30 +26,87 @@ import { HeroSkeleton } from "@/src/components/LoadingSkeletons";
 import MatchScore from "@/src/components/MatchScore";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
 import TasteTag from "@/src/components/TasteTag";
+import { useAuth } from "@/src/context/AuthContext";
 import {
-  discoverQueue,
-  featuredFilm,
-  hiddenGems,
-  trending,
+  discoverQueue as fallbackDiscoverQueue,
+  featuredFilm as fallbackFeaturedFilm,
+  hiddenGems as fallbackHiddenGems,
+  trending as fallbackTrending,
 } from "@/src/data/mockData";
 import { trackEvent } from "@/src/lib/analytics";
+import { supabase } from "@/src/lib/supabase";
+import { fetchHomeSections } from "@/src/lib/tmdb";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton } from "./shared";
 
+const FALLBACK_HOME_SECTIONS = {
+  featuredFilm: fallbackFeaturedFilm,
+  hiddenGems: fallbackHiddenGems,
+  trending: fallbackTrending,
+  discoverQueue: fallbackDiscoverQueue,
+};
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [showReveal, setShowReveal] = useState(false);
+  const [homeSections, setHomeSections] = useState(FALLBACK_HOME_SECTIONS);
+  const [preferredGenres, setPreferredGenres] = useState<string[]>([]);
   const revealLockedUntilRef = useRef(0);
   const revealInProgressRef = useRef(false);
   const revealAnimation = useRef(new Animated.Value(0)).current;
   const nearEndRef = useRef(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 350);
-    return () => clearTimeout(timer);
-  }, []);
+    let active = true;
+    const loadProfileTasteTags = async () => {
+      if (!supabase || !user) {
+        setPreferredGenres([]);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("taste_tags")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      setPreferredGenres(Array.isArray(data?.taste_tags) ? data.taste_tags : []);
+    };
+
+    void loadProfileTasteTags();
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHomeSections = async () => {
+      setLoading(true);
+      try {
+        const remoteSections = await fetchHomeSections({ preferredGenres });
+        if (!active) return;
+        setHomeSections(remoteSections);
+      } catch {
+        if (!active) return;
+        setHomeSections(FALLBACK_HOME_SECTIONS);
+      } finally {
+        if (!active) return;
+        setLoading(false);
+      }
+    };
+
+    void loadHomeSections();
+
+    return () => {
+      active = false;
+    };
+  }, [preferredGenres]);
 
   const openFilm = (film: Film) =>
     router.push(
@@ -117,13 +175,21 @@ export default function HomeScreen() {
       {loading ? (
         <HeroSkeleton />
       ) : (
-        <Pressable style={styles.featuredCard} onPress={() => openFilm(featuredFilm)}>
+        <Pressable style={styles.featuredCard} onPress={() => openFilm(homeSections.featuredFilm)}>
           <View style={styles.featuredPoster}>
+            {homeSections.featuredFilm.posterUrl ? (
+              <Image
+                source={{ uri: homeSections.featuredFilm.posterUrl }}
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                transition={160}
+              />
+            ) : null}
             <TheaterCurtain style={StyleSheet.absoluteFillObject} />
             <View
               style={[
                 styles.featuredTint,
-                { backgroundColor: withOpacity(featuredFilm.posterColor, 0.24) },
+                { backgroundColor: withOpacity(homeSections.featuredFilm.posterColor, 0.24) },
               ]}
             />
             <View style={styles.featuredPill}>
@@ -132,12 +198,12 @@ export default function HomeScreen() {
           </View>
           <View style={styles.featuredBody}>
             <View style={styles.featuredMetaRow}>
-              <MatchScore score={featuredFilm.matchScore} />
+              <MatchScore score={homeSections.featuredFilm.matchScore} />
               <TasteTag label="Featured" variant="accent" />
             </View>
-            <Text style={styles.featuredTitle}>{featuredFilm.title}</Text>
+            <Text style={styles.featuredTitle}>{homeSections.featuredFilm.title}</Text>
             <Text style={styles.featuredSynopsis} numberOfLines={2}>
-              {featuredFilm.synopsis}
+              {homeSections.featuredFilm.synopsis}
             </Text>
           </View>
         </Pressable>
@@ -146,21 +212,21 @@ export default function HomeScreen() {
       <HorizontalFilmRail
         title="Hidden Gems"
         subtitle="Low-noise picks matched to your taste"
-        films={hiddenGems}
+        films={homeSections.hiddenGems}
         onFilmPress={openFilm}
       />
 
       <HorizontalFilmRail
         title="Trending"
         subtitle="What your taste profile is leaning toward"
-        films={trending}
+        films={homeSections.trending}
         onFilmPress={openFilm}
       />
 
       <HorizontalFilmRail
         title="Recommended"
         subtitle="Fast lane suggestions for tonight"
-        films={discoverQueue.slice(0, 6)}
+        films={homeSections.discoverQueue.slice(0, 6)}
         onFilmPress={openFilm}
       />
 

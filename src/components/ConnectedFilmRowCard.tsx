@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -30,6 +31,14 @@ export default function ConnectedFilmRowCard({
         style={({ pressed }) => [styles.leftPane, pressed && styles.leftPanePressed]}
       >
         <View style={[styles.poster, { backgroundColor: film.posterColor }]}>
+          {film.posterUrl ? (
+            <Image
+              source={{ uri: film.posterUrl }}
+              style={styles.posterImage}
+              contentFit="cover"
+              transition={120}
+            />
+          ) : null}
           <View style={styles.matchWrap}>
             <MatchScore score={film.matchScore} />
           </View>
@@ -72,6 +81,10 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border.default,
     padding: SPACING.sm,
     alignItems: "flex-end",
+    overflow: "hidden",
+  },
+  posterImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   matchWrap: {
     alignSelf: "flex-end",

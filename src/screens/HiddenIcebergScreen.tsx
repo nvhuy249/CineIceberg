@@ -1,14 +1,15 @@
 import { useRouter, type Href } from "expo-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY, withOpacity } from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 import FilmCard from "@/src/components/FilmCard";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
-import { films, getFilmsByIds } from "@/src/data/mockData";
+import { films, getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
+import { fetchHiddenIcebergCandidates } from "@/src/lib/tmdb";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
@@ -24,14 +25,40 @@ const MAX_SUGGESTIONS = 6;
 export default function HiddenIcebergScreen() {
   const router = useRouter();
   const { watchlists } = useWatchlists();
+  const [candidateFilms, setCandidateFilms] = useState<Film[]>(films);
+  const [isLoadingCandidates, setIsLoadingCandidates] = useState(true);
 
   useEffect(() => {
     trackEvent("hidden_opened", { source: "iceberg_route" });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadCandidates = async () => {
+      setIsLoadingCandidates(true);
+      try {
+        const remoteCandidates = await fetchHiddenIcebergCandidates();
+        if (!active) return;
+        setCandidateFilms(remoteCandidates.length > 0 ? remoteCandidates : films);
+      } catch {
+        if (!active) return;
+        setCandidateFilms(films);
+      } finally {
+        if (!active) return;
+        setIsLoadingCandidates(false);
+      }
+    };
+
+    void loadCandidates();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const suggestions = useMemo(() => {
     const savedIds = watchlists.flatMap((watchlist) => watchlist.filmIds);
-    const savedFilms = getFilmsByIds(savedIds);
+    const savedFilms = getFilmsByTmdbIds(savedIds);
 
     const genreFrequency = new Map<string, number>();
     savedFilms.forEach((film) => {
@@ -40,8 +67,8 @@ export default function HiddenIcebergScreen() {
       });
     });
 
-    const ranked: HiddenSuggestion[] = films
-      .filter((film) => !savedIds.includes(film.id))
+    const ranked: HiddenSuggestion[] = candidateFilms
+      .filter((film) => !savedIds.includes(film.tmdbId))
       .map((film) => {
         const overlappingGenres = film.genres.filter((genre) => genreFrequency.has(genre));
         const depthBonus = film.genres.includes("Slow Burn") || film.genres.includes("Mystery") ? 8 : 0;
@@ -56,7 +83,7 @@ export default function HiddenIcebergScreen() {
       .sort((a, b) => b.depthScore - a.depthScore || a.film.title.localeCompare(b.film.title));
 
     return ranked.slice(0, MAX_SUGGESTIONS);
-  }, [watchlists]);
+  }, [candidateFilms, watchlists]);
 
   return (
     <AppScreen
@@ -76,6 +103,9 @@ export default function HiddenIcebergScreen() {
 
       <View style={screenStyles.section}>
         <SectionTitle title="Below The Surface" subtitle={`${suggestions.length} hidden picks`} />
+        {isLoadingCandidates ? (
+          <Text style={styles.loadingText}>Refreshing hidden picks from TMDB...</Text>
+        ) : null}
         {suggestions.map((item) => (
           <View key={item.film.id} style={styles.suggestionCard}>
             <FilmCard
@@ -155,6 +185,10 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xs,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
     paddingHorizontal: SPACING.xs,
+  },
+  loadingText: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
   },
   footerCard: {
     backgroundColor: withOpacity(COLORS.theater.stage, 0.5),

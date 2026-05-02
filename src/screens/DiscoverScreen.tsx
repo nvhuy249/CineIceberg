@@ -1,5 +1,5 @@
 import { useRouter, type Href } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   PanResponder,
@@ -24,7 +24,8 @@ import MatchScore from "@/src/components/MatchScore";
 import TasteTag from "@/src/components/TasteTag";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
-import { discoverQueue, tasteTags } from "@/src/data/mockData";
+import { discoverQueue as fallbackDiscoverQueue, tasteTags } from "@/src/data/mockData";
+import { fetchDiscoverQueue } from "@/src/lib/tmdb";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
@@ -36,6 +37,8 @@ type DiscoverAction = "like" | "pass";
 export default function DiscoverScreen() {
   const router = useRouter();
   const { addFilmToDiscoverWatchlist } = useWatchlists();
+  const [queue, setQueue] = useState(fallbackDiscoverQueue);
+  const [isQueueLoading, setIsQueueLoading] = useState(false);
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState(0);
   const [passed, setPassed] = useState(0);
@@ -43,15 +46,32 @@ export default function DiscoverScreen() {
   const swipe = useRef(new Animated.ValueXY()).current;
   const actionLockRef = useRef(false);
 
-  const currentFilm = discoverQueue[index];
-  const remaining = Math.max(discoverQueue.length - index, 0);
+  const currentFilm = queue[index];
+  const nextFilm = queue[index + 1];
+  const remaining = Math.max(queue.length - index, 0);
+
+  const loadQueue = useCallback(async () => {
+    setIsQueueLoading(true);
+    try {
+      const remoteQueue = await fetchDiscoverQueue();
+      setQueue(remoteQueue.length > 0 ? remoteQueue : fallbackDiscoverQueue);
+    } catch {
+      setQueue(fallbackDiscoverQueue);
+    } finally {
+      setIsQueueLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadQueue();
+  }, [loadQueue]);
 
   const nextCard = useCallback((action: DiscoverAction) => {
     setHistory((values) => [...values, { index, action }]);
-    setIndex((value) => Math.min(value + 1, discoverQueue.length));
+    setIndex((value) => Math.min(value + 1, queue.length));
     if (action === "like") setLiked((value) => value + 1);
     if (action === "pass") setPassed((value) => value + 1);
-  }, [index]);
+  }, [index, queue.length]);
 
   const resetSwipePosition = useCallback(() => {
     Animated.spring(swipe, {
@@ -65,7 +85,7 @@ export default function DiscoverScreen() {
   const commitAction = useCallback(
     (action: DiscoverAction) => {
       if (action === "like" && currentFilm) {
-        addFilmToDiscoverWatchlist(currentFilm.id);
+        void addFilmToDiscoverWatchlist(currentFilm.tmdbId);
       }
       nextCard(action);
     },
@@ -170,9 +190,25 @@ export default function DiscoverScreen() {
 
       {!currentFilm ? (
         <EmptyState
-          title="No more cards"
-          message="You've reached the end of the discover queue."
-          action={<CTAButton label="Restart Deck" onPress={() => setIndex(0)} />}
+          title={isQueueLoading ? "Loading cards..." : "No more cards"}
+          message={
+            isQueueLoading
+              ? "Fetching the next discover queue."
+              : "You've reached the end of the discover queue."
+          }
+          action={
+            <CTAButton
+              label={isQueueLoading ? "Loading..." : "Restart Deck"}
+              disabled={isQueueLoading}
+              onPress={() => {
+                if (queue.length > 0) {
+                  setIndex(0);
+                  return;
+                }
+                void loadQueue();
+              }}
+            />
+          }
         />
       ) : (
         <>
@@ -182,27 +218,34 @@ export default function DiscoverScreen() {
             </View>
             <View style={styles.stageDeck}>
               <View style={styles.stageGlow} />
-              <Animated.View
-                style={[
-                  styles.swipeAnimatedCard,
-                  {
-                    transform: [
-                      { translateX: swipe.x },
-                      { translateY: swipe.y },
-                      { rotate: cardRotation },
-                    ],
-                  },
-                ]}
-                {...panResponder.panHandlers}
-              >
-                <FilmCard film={currentFilm} variant="swipe" />
-                <View style={styles.overlayRow}>
-                  <MatchScore score={currentFilm.matchScore} />
-                  {currentFilm.genres.slice(0, 2).map((genre) => (
-                    <TasteTag key={genre} label={genre} />
-                  ))}
-                </View>
-              </Animated.View>
+              <View style={styles.cardStack}>
+                {nextFilm ? (
+                  <View pointerEvents="none" style={styles.nextCardLayer}>
+                    <FilmCard film={nextFilm} variant="swipe" />
+                  </View>
+                ) : null}
+                <Animated.View
+                  style={[
+                    styles.swipeAnimatedCard,
+                    {
+                      transform: [
+                        { translateX: swipe.x },
+                        { translateY: swipe.y },
+                        { rotate: cardRotation },
+                      ],
+                    },
+                  ]}
+                  {...panResponder.panHandlers}
+                >
+                  <FilmCard film={currentFilm} variant="swipe" />
+                  <View style={styles.overlayRow}>
+                    <MatchScore score={currentFilm.matchScore} />
+                    {currentFilm.genres.slice(0, 2).map((genre) => (
+                      <TasteTag key={genre} label={genre} />
+                    ))}
+                  </View>
+                </Animated.View>
+              </View>
               <Animated.View style={[styles.swipeHint, styles.likeHint, { opacity: likeOpacity }]}>
                 <Text style={styles.swipeHintText}>LIKE</Text>
               </Animated.View>
@@ -269,9 +312,18 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     gap: SPACING.sm,
     backgroundColor: withOpacity(COLORS.theater.stage, 0.5),
+    position: "relative",
+  },
+  cardStack: {
+    position: "relative",
   },
   swipeAnimatedCard: {
     zIndex: 2,
+  },
+  nextCardLayer: {
+    ...StyleSheet.absoluteFillObject,
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
   stageGlow: {
     position: "absolute",

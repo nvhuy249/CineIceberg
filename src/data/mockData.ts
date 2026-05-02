@@ -4,6 +4,8 @@ import type { Watchlist } from "@/src/types/watchlist";
 export const films: Film[] = [
   {
     id: "blade-runner-2049",
+    tmdbId: 335984,
+    mediaType: "movie",
     title: "Blade Runner 2049",
     year: 2017,
     runtimeMinutes: 164,
@@ -22,6 +24,8 @@ export const films: Film[] = [
   },
   {
     id: "parasite",
+    tmdbId: 496243,
+    mediaType: "movie",
     title: "Parasite",
     year: 2019,
     runtimeMinutes: 132,
@@ -40,6 +44,8 @@ export const films: Film[] = [
   },
   {
     id: "moonlight",
+    tmdbId: 376867,
+    mediaType: "movie",
     title: "Moonlight",
     year: 2016,
     runtimeMinutes: 111,
@@ -58,6 +64,8 @@ export const films: Film[] = [
   },
   {
     id: "the-handmaiden",
+    tmdbId: 290098,
+    mediaType: "movie",
     title: "The Handmaiden",
     year: 2016,
     runtimeMinutes: 145,
@@ -76,6 +84,8 @@ export const films: Film[] = [
   },
   {
     id: "drive",
+    tmdbId: 64690,
+    mediaType: "movie",
     title: "Drive",
     year: 2011,
     runtimeMinutes: 100,
@@ -94,6 +104,8 @@ export const films: Film[] = [
   },
   {
     id: "aftersun",
+    tmdbId: 965150,
+    mediaType: "movie",
     title: "Aftersun",
     year: 2022,
     runtimeMinutes: 101,
@@ -112,6 +124,8 @@ export const films: Film[] = [
   },
   {
     id: "arrival",
+    tmdbId: 329865,
+    mediaType: "movie",
     title: "Arrival",
     year: 2016,
     runtimeMinutes: 116,
@@ -130,6 +144,8 @@ export const films: Film[] = [
   },
   {
     id: "burning",
+    tmdbId: 491584,
+    mediaType: "movie",
     title: "Burning",
     year: 2018,
     runtimeMinutes: 148,
@@ -148,6 +164,8 @@ export const films: Film[] = [
   },
   {
     id: "severance",
+    tmdbId: 95396,
+    mediaType: "tv",
     title: "Severance",
     year: 2022,
     runtimeMinutes: 510,
@@ -166,6 +184,8 @@ export const films: Film[] = [
   },
   {
     id: "dark",
+    tmdbId: 70523,
+    mediaType: "tv",
     title: "Dark",
     year: 2017,
     runtimeMinutes: 1560,
@@ -184,6 +204,8 @@ export const films: Film[] = [
   },
   {
     id: "the-bear",
+    tmdbId: 136315,
+    mediaType: "tv",
     title: "The Bear",
     year: 2022,
     runtimeMinutes: 540,
@@ -233,10 +255,28 @@ export const tasteTags = [
   "Auteur-Driven",
 ];
 
-export const getFilmById = (id: string) => films.find((film) => film.id === id);
+const runtimeFilmsById = new Map<string, Film>();
+const runtimeFilmsByTmdbId = new Map<number, Film>();
+
+export const cacheFilms = (nextFilms: Film[]) => {
+  nextFilms.forEach((film) => {
+    runtimeFilmsById.set(film.id, film);
+    runtimeFilmsByTmdbId.set(film.tmdbId, film);
+  });
+};
+
+export const getFilmById = (id: string) =>
+  runtimeFilmsById.get(id) ?? films.find((film) => film.id === id);
+
+export const getFilmByTmdbId = (tmdbId: number) =>
+  runtimeFilmsByTmdbId.get(tmdbId) ?? films.find((film) => film.tmdbId === tmdbId);
 
 export const getFilmsByIds = (ids: string[]) =>
   ids.map((id) => getFilmById(id)).filter((film): film is Film => Boolean(film));
+export const getFilmsByTmdbIds = (tmdbIds: number[]) =>
+  tmdbIds
+    .map((tmdbId) => getFilmByTmdbId(tmdbId))
+    .filter((film): film is Film => Boolean(film));
 
 export const featuredFilm = getFilmById(featuredFilmId) ?? films[0];
 export const hiddenGems = getFilmsByIds(hiddenGemIds);
@@ -255,39 +295,47 @@ export const initialWatchlists: Watchlist[] = [
     accent: "#5f748d",
     emoji: "DISC",
     layoutSize: "standard",
+    isDefault: true,
+    defaultType: "discover",
   },
   {
     id: "mind-bending-sci-fi",
     name: "Mind-Bending Sci-Fi",
     description: "Big concepts, existential tension, and polished visuals.",
-    filmIds: ["arrival", "blade-runner-2049", "severance"],
+    filmIds: [329865, 335984, 95396],
     createdAt: "2026-02-10T08:00:00.000Z",
     updatedAt: "2026-02-18T08:00:00.000Z",
     accent: "#6f8ead",
     emoji: "ICE",
     layoutSize: "tall",
+    isDefault: false,
+    defaultType: null,
   },
   {
     id: "twists-and-tension",
     name: "Twists & Tension",
     description: "Layered thrillers with sharp turns and moral pressure.",
-    filmIds: ["parasite", "the-handmaiden", "burning"],
+    filmIds: [496243, 290098, 491584],
     createdAt: "2026-02-12T08:00:00.000Z",
     updatedAt: "2026-02-19T08:00:00.000Z",
     accent: "#9f6d72",
     emoji: "NOIR",
     layoutSize: "standard",
+    isDefault: false,
+    defaultType: null,
   },
   {
     id: "quiet-character-stories",
     name: "Quiet Character Stories",
     description: "Emotion-first films and series with intimate arcs.",
-    filmIds: ["moonlight", "aftersun", "the-bear"],
+    filmIds: [376867, 965150, 136315],
     createdAt: "2026-02-14T08:00:00.000Z",
     updatedAt: "2026-02-20T08:00:00.000Z",
     accent: "#8e7b62",
     emoji: "SOFT",
     layoutSize: "compact",
+    isDefault: false,
+    defaultType: null,
   },
 ];
 
