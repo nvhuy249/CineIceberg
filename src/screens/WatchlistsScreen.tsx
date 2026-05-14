@@ -22,6 +22,7 @@ import WatchlistNoteCard from "@/src/components/WatchlistNoteCard";
 import { getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
@@ -53,6 +54,7 @@ export default function WatchlistsScreen() {
       watchlist_id: created.id,
       has_description: Boolean(description.trim()),
     });
+    blurActiveElementOnWeb();
     router.push(
       ({
         pathname: "/watchlists/[id]",
@@ -61,13 +63,15 @@ export default function WatchlistsScreen() {
     );
   };
 
-  const openWatchlist = (id: string) =>
+  const openWatchlist = (id: string) => {
+    blurActiveElementOnWeb();
     router.push(
       ({
         pathname: "/watchlists/[id]",
         params: { id },
       } as unknown) as Href,
     );
+  };
 
   const closeCreateModal = () => {
     setShowCreateModal(false);

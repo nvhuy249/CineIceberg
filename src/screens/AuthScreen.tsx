@@ -26,6 +26,8 @@ import {
   withOpacity,
 } from "@/src/constants/designTokens";
 import { useAuth } from "@/src/context/AuthContext";
+import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 
 type AuthMode = "login" | "signup";
 type TabFrame = { x: number; width: number };
@@ -87,7 +89,7 @@ export default function AuthScreen() {
     setFeedback(null);
     Animated.spring(modeValue, {
       toValue: nextMode === "login" ? 0 : 1,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
       tension: 92,
       friction: 10,
     }).start();
@@ -213,6 +215,7 @@ export default function AuthScreen() {
     }
 
     try {
+      blurActiveElementOnWeb();
       setIsSubmitting(true);
       setFeedback(null);
       const { error } = await signIn({ email, password: loginPassword });
@@ -245,6 +248,7 @@ export default function AuthScreen() {
     }
 
     try {
+      blurActiveElementOnWeb();
       setIsSubmitting(true);
       setFeedback(null);
       const { error } = await signUp({
@@ -302,7 +306,7 @@ export default function AuthScreen() {
           <View style={styles.container}>
             <View style={styles.ticketHero}>
               <View style={styles.ticketBorder}>
-                <View pointerEvents="none" style={styles.ticketInnerBorder}>
+                <View style={[styles.ticketInnerBorder, styles.noPointerEvents]}>
                   <View style={styles.ticketInnerEdgeTop} />
                   <View style={styles.ticketInnerEdgeBottom} />
                   <View style={styles.ticketInnerEdgeLeft} />
@@ -344,7 +348,14 @@ export default function AuthScreen() {
                       />
                     </View>
                     <Text style={styles.ticketSubline}>Movie night special entry</Text>
-                    <Text style={styles.ticketTitle} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text
+                      style={[
+                        styles.ticketTitle,
+                        { textShadow: `0px 1px 0px ${withOpacity(COLORS.background.primary, 0.15)}` } as never,
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
                       TICKET
                     </Text>
                     <Text style={styles.ticketCaption}>GOOD FOR ONE ADMISSION</Text>
@@ -641,6 +652,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     zIndex: 2,
   },
+  noPointerEvents: {
+    pointerEvents: "none",
+  },
   ticketInnerEdgeTop: {
     position: "absolute",
     top: 0,
@@ -807,9 +821,6 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeight.bold,
     letterSpacing: 1.4,
     textTransform: "uppercase",
-    textShadowColor: withOpacity(COLORS.background.primary, 0.15),
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 0,
     textAlign: "center",
     width: "100%",
     includeFontPadding: false,

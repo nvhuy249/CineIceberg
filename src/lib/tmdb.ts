@@ -32,6 +32,15 @@ type TmdbCreditsPayload = {
   crew?: TmdbCrewMember[];
 };
 
+type TmdbImageAsset = {
+  file_path?: string;
+};
+
+type TmdbImagesPayload = {
+  backdrops?: TmdbImageAsset[];
+  posters?: TmdbImageAsset[];
+};
+
 type TmdbGenre = {
   id: number;
   name: string;
@@ -56,6 +65,7 @@ type TmdbItem = {
   popularity?: number;
   credits?: TmdbCreditsPayload;
   videos?: TmdbVideoPayload;
+  images?: TmdbImagesPayload;
   created_by?: { name?: string }[];
 };
 
@@ -131,6 +141,20 @@ const TV_GENRES: Record<number, string> = {
   10768: "War",
   37: "Western",
 };
+
+const toGenreIdLookup = (genreMap: Record<number, string>) => {
+  const lookup = new Map<string, number[]>();
+  Object.entries(genreMap).forEach(([id, name]) => {
+    const key = name.toLowerCase();
+    const current = lookup.get(key) ?? [];
+    current.push(Number(id));
+    lookup.set(key, current);
+  });
+  return lookup;
+};
+
+const MOVIE_GENRE_IDS_BY_NAME = toGenreIdLookup(MOVIE_GENRES);
+const TV_GENRE_IDS_BY_NAME = toGenreIdLookup(TV_GENRES);
 
 const withFallback = <T,>(value: T, fallback: T) => (value ? value : fallback);
 
@@ -213,12 +237,41 @@ const toVideos = (item: TmdbItem) => {
     }));
 };
 
-const toPosterUrl = (item: TmdbItem) => {
-  const path = item.poster_path || item.backdrop_path;
+const toImageUrl = (path?: string, size: string = "w500") => {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${TMDB_IMAGE_BASE_URL}/w500${normalizedPath}`;
+  return `${TMDB_IMAGE_BASE_URL}/${size}${normalizedPath}`;
+};
+
+const toPosterUrl = (item: TmdbItem) => {
+  const path = item.poster_path || item.backdrop_path;
+  return toImageUrl(path, "w500");
+};
+
+const toBackdropUrl = (item: TmdbItem) => {
+  const path = item.backdrop_path || item.poster_path;
+  return toImageUrl(path, "w1280");
+};
+
+const toGalleryUrls = (item: TmdbItem) => {
+  const urls: string[] = [];
+  const pushUnique = (value: string | null) => {
+    if (!value) return;
+    if (!urls.includes(value)) urls.push(value);
+  };
+
+  pushUnique(toImageUrl(item.poster_path, "w780"));
+  pushUnique(toImageUrl(item.backdrop_path, "w1280"));
+
+  (item.images?.posters ?? [])
+    .slice(0, 4)
+    .forEach((asset) => pushUnique(toImageUrl(asset.file_path, "w780")));
+  (item.images?.backdrops ?? [])
+    .slice(0, 6)
+    .forEach((asset) => pushUnique(toImageUrl(asset.file_path, "w1280")));
+
+  return urls.slice(0, 8);
 };
 
 const toFilm = (item: TmdbItem, fallbackType: MediaType): Film => {
@@ -231,6 +284,8 @@ const toFilm = (item: TmdbItem, fallbackType: MediaType): Film => {
     tmdbId: item.id,
     mediaType,
     posterUrl: toPosterUrl(item),
+    backdropUrl: toBackdropUrl(item),
+    imageGalleryUrls: toGalleryUrls(item),
     title,
     year: getYear(item),
     runtimeMinutes: getRuntimeMinutes(item, mediaType),
@@ -550,6 +605,303 @@ export const fetchHiddenIcebergCandidates = async (): Promise<Film[]> => {
   }
 };
 
+export const fetchWatchlistRecommendationCandidates = async (
+  seedFilms: Film[],
+  options: { refreshSeed?: number } = {},
+): Promise<Film[]> => {
+  const refreshSeed = Math.max(0, options.refreshSeed ?? 0);
+  const primaryPage = (refreshSeed % 3) + 1;
+  const secondaryPage = ((refreshSeed + 1) % 4) + 1;
+
+  const isAnimationCompatible = (film: Film) =>
+    film.genres.some((genre) => {
+      const normalized = genre.toLowerCase();
+      return normalized === "animation" || normalized === "anime";
+    });
+
+  const filterForWatchlistNiche = (films: Film[], isAnimeLikeWatchlist: boolean) =>
+    isAnimeLikeWatchlist ? films.filter(isAnimationCompatible) : films;
+
+  const animationLikeSeedCount = seedFilms.filter((film) => isAnimationCompatible(film)).length;
+  const tvLikeSeedCount = seedFilms.filter((film) => film.mediaType === "tv").length;
+  const liveActionSeedCount = seedFilms.length - animationLikeSeedCount;
+  const isAnimeLikeSeed =
+    seedFilms.length > 0 &&
+    animationLikeSeedCount / seedFilms.length >= 0.7 &&
+    tvLikeSeedCount / seedFilms.length >= 0.65 &&
+    liveActionSeedCount <= Math.max(1, Math.floor(seedFilms.length * 0.2));
+
+  const safeInvoke = async (
+    endpoint: string,
+    params: Record<string, string | number | boolean> = {},
+  ) => {
+    try {
+      return await invokeTmdb<TmdbListResponse>(endpoint, params);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn("[watchlist-reco] TMDB call failed", { endpoint, params, error });
+      }
+      return null;
+    }
+  };
+
+  const logRecoDebug = (
+    stage: string,
+    values: Record<string, number | string | boolean | null | undefined>,
+  ) => {
+    if (!__DEV__) return;
+    console.log("[watchlist-reco]", stage, values);
+  };
+
+  try {
+    // If watchlist is empty, still provide a non-empty TMDB candidate pool.
+    if (seedFilms.length === 0) {
+      const trendingRaw = await safeInvoke("trending/all/week", { page: primaryPage });
+      return dedupeByTmdb(
+        mapListToFilms(
+          (trendingRaw?.results ?? []).filter(
+            (item) => item.media_type === "movie" || item.media_type === "tv",
+          ),
+          "movie",
+        ),
+      ).slice(0, 48);
+    }
+
+    const genreFrequency = new Map<string, number>();
+    seedFilms.forEach((film) => {
+      film.genres.forEach((genre) => {
+        if (genre.toLowerCase() === "series") return;
+        genreFrequency.set(genre, (genreFrequency.get(genre) ?? 0) + 1);
+      });
+    });
+
+    const topGenres = [...genreFrequency.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([genre]) => genre)
+      .slice(0, 3);
+
+    const movieGenreIds = topGenres
+      .flatMap((genre) => MOVIE_GENRE_IDS_BY_NAME.get(genre.toLowerCase()) ?? [])
+      .slice(0, 4);
+    const tvGenreIds = topGenres
+      .flatMap((genre) => TV_GENRE_IDS_BY_NAME.get(genre.toLowerCase()) ?? [])
+      .slice(0, 4);
+
+    const isAnimeLikeWatchlist = isAnimeLikeSeed;
+
+    const movieDiscoverParams: Record<string, string | number | boolean> = {
+      page: primaryPage,
+      sort_by: "vote_average.desc",
+      "vote_count.gte": 40,
+      "vote_count.lte": 12000,
+    };
+    if (movieGenreIds.length > 0) {
+      movieDiscoverParams.with_genres = movieGenreIds.join(",");
+    }
+
+    const tvDiscoverParams: Record<string, string | number | boolean> = {
+      page: primaryPage,
+      sort_by: "vote_average.desc",
+      "vote_count.gte": 30,
+      "vote_count.lte": 9000,
+    };
+    if (tvGenreIds.length > 0) {
+      tvDiscoverParams.with_genres = tvGenreIds.join(",");
+    }
+    if (isAnimeLikeWatchlist) {
+      tvDiscoverParams.with_original_language = "ja";
+      // Force animation into the genre filter for anime-heavy lists.
+      const current = typeof tvDiscoverParams.with_genres === "string"
+        ? tvDiscoverParams.with_genres.split(",").filter(Boolean)
+        : [];
+      if (!current.includes("16")) current.push("16");
+      tvDiscoverParams.with_genres = current.join(",");
+    }
+
+    const discoverCalls = [
+      safeInvoke("discover/movie", movieDiscoverParams),
+      safeInvoke("discover/tv", tvDiscoverParams),
+    ];
+
+    const rotatedSeeds = [...seedFilms.slice(refreshSeed % seedFilms.length), ...seedFilms.slice(0, refreshSeed % seedFilms.length)];
+    const similarSeeds = rotatedSeeds.slice(0, 5);
+    const similarCalls = similarSeeds.map((film, index) =>
+      safeInvoke(`${film.mediaType}/${film.tmdbId}/similar`, {
+        page: ((refreshSeed + index) % 3) + 1,
+      }),
+    );
+
+    const responses = await Promise.all([...discoverCalls, ...similarCalls]);
+    const [discoverMovies, discoverTv, ...similarResponses] = responses;
+
+    const movieCandidates = mapListToFilms(discoverMovies?.results ?? [], "movie");
+    const tvCandidates = mapListToFilms(discoverTv?.results ?? [], "tv");
+    const similarCandidates = similarResponses.flatMap((response, index) => {
+      const seed = similarSeeds[index];
+      if (!seed) return [];
+      return mapListToFilms(response?.results ?? [], seed.mediaType);
+    });
+
+    let mergedPrimary = dedupeByTmdb([
+      ...similarCandidates,
+      ...movieCandidates,
+      ...tvCandidates,
+    ]);
+    let nichePrimary = filterForWatchlistNiche(mergedPrimary, isAnimeLikeWatchlist);
+
+    logRecoDebug("primary", {
+      isAnimeLikeWatchlist,
+      seedCount: seedFilms.length,
+      similarCount: similarCandidates.length,
+      movieDiscoverCount: movieCandidates.length,
+      tvDiscoverCount: tvCandidates.length,
+      mergedPrimaryCount: mergedPrimary.length,
+      nichePrimaryCount: nichePrimary.length,
+    });
+
+    // Progressive relaxation before trending backfill:
+    // if strict filters are too narrow, run looser discover queries.
+    if (nichePrimary.length < 12) {
+      const relaxedMovieParams: Record<string, string | number | boolean> = {
+        page: secondaryPage,
+        sort_by: "popularity.desc",
+        "vote_count.gte": 10,
+      };
+      if (movieGenreIds.length > 0) {
+        relaxedMovieParams.with_genres = movieGenreIds.join(",");
+      }
+
+      const relaxedTvParams: Record<string, string | number | boolean> = {
+        page: secondaryPage,
+        sort_by: "popularity.desc",
+        "vote_count.gte": 10,
+      };
+      if (tvGenreIds.length > 0) {
+        relaxedTvParams.with_genres = tvGenreIds.join(",");
+      }
+      if (isAnimeLikeWatchlist) {
+        const current = typeof relaxedTvParams.with_genres === "string"
+          ? relaxedTvParams.with_genres.split(",").filter(Boolean)
+          : [];
+        if (!current.includes("16")) current.push("16");
+        relaxedTvParams.with_genres = current.join(",");
+      }
+
+      const [relaxedMovies, relaxedTv] = await Promise.all([
+        safeInvoke("discover/movie", relaxedMovieParams),
+        safeInvoke("discover/tv", relaxedTvParams),
+      ]);
+
+      const relaxedCandidates = dedupeByTmdb([
+        ...mapListToFilms(relaxedMovies?.results ?? [], "movie"),
+        ...mapListToFilms(relaxedTv?.results ?? [], "tv"),
+      ]);
+
+      mergedPrimary = dedupeByTmdb([...mergedPrimary, ...relaxedCandidates]);
+      nichePrimary = filterForWatchlistNiche(mergedPrimary, isAnimeLikeWatchlist);
+      logRecoDebug("relaxed", {
+        relaxedCount: relaxedCandidates.length,
+        nicheCountAfterRelaxed: nichePrimary.length,
+      });
+    }
+
+    if (nichePrimary.length >= 12) {
+      logRecoDebug("return-niche-primary", {
+        nicheCount: nichePrimary.length,
+      });
+      return nichePrimary.slice(0, 48);
+    }
+
+    // Second relaxation: broaden with page-2 discover before touching trending.
+    if (nichePrimary.length < 12) {
+      const [moviePage2, tvPage2] = await Promise.all([
+        safeInvoke("discover/movie", {
+          ...movieDiscoverParams,
+          page: secondaryPage,
+        }),
+        safeInvoke("discover/tv", {
+          ...tvDiscoverParams,
+          page: secondaryPage,
+        }),
+      ]);
+
+      const page2Candidates = dedupeByTmdb([
+        ...mapListToFilms(moviePage2?.results ?? [], "movie"),
+        ...mapListToFilms(tvPage2?.results ?? [], "tv"),
+      ]);
+
+      const nichePage2 = filterForWatchlistNiche(page2Candidates, isAnimeLikeWatchlist);
+
+      nichePrimary = dedupeByTmdb([...nichePrimary, ...nichePage2]);
+      logRecoDebug("page2", {
+        page2Count: page2Candidates.length,
+        nicheCountAfterPage2: nichePrimary.length,
+      });
+      if (nichePrimary.length >= 12) {
+        logRecoDebug("return-niche-page2", {
+          nicheCount: nichePrimary.length,
+        });
+        return nichePrimary.slice(0, 48);
+      }
+    }
+
+    // Backfill with trending only as last mile (small gap fill, not dominant source).
+    if (nichePrimary.length < 8) {
+      const trendingRaw = await safeInvoke("trending/all/day", { page: primaryPage });
+      const trendingCandidates = mapListToFilms(
+        (trendingRaw?.results ?? []).filter(
+          (item) => item.media_type === "movie" || item.media_type === "tv",
+        ),
+        "movie",
+      );
+      const trendingBackfill = filterForWatchlistNiche(trendingCandidates, isAnimeLikeWatchlist);
+      const gap = Math.max(0, 10 - nichePrimary.length);
+      const cappedTrending = trendingBackfill.slice(0, gap);
+      const merged = dedupeByTmdb([...nichePrimary, ...cappedTrending]);
+      logRecoDebug("trending-backfill", {
+        nicheCount: nichePrimary.length,
+        trendingCount: trendingCandidates.length,
+        trendingBackfillCount: cappedTrending.length,
+        mergedCount: merged.length,
+      });
+      if (merged.length > 0) {
+        return merged.slice(0, 48);
+      }
+    }
+
+    // Last-resort fallback from live TMDB (still no mock data).
+    const fallbackTrendingRaw = await safeInvoke("trending/all/week", { page: secondaryPage });
+    logRecoDebug("fallback-last-resort", {
+      fallbackCount: (fallbackTrendingRaw?.results ?? []).length,
+    });
+    return filterForWatchlistNiche(dedupeByTmdb(
+      mapListToFilms(
+        (fallbackTrendingRaw?.results ?? []).filter(
+          (item) => item.media_type === "movie" || item.media_type === "tv",
+        ),
+        "movie",
+      ),
+    ), isAnimeLikeWatchlist).slice(0, 48);
+  } catch {
+    try {
+      const fallbackTrendingRaw = await safeInvoke("trending/all/week", { page: 1 });
+      logRecoDebug("fallback-catch", {
+        fallbackCount: (fallbackTrendingRaw?.results ?? []).length,
+      });
+      return filterForWatchlistNiche(dedupeByTmdb(
+        mapListToFilms(
+          (fallbackTrendingRaw?.results ?? []).filter(
+            (item) => item.media_type === "movie" || item.media_type === "tv",
+          ),
+          "movie",
+        ),
+      ), isAnimeLikeSeed).slice(0, 48);
+    } catch {
+      return [];
+    }
+  }
+};
+
 export const fetchFilmDetailByRouteId = async (routeId?: string) => {
   if (!routeId) return null;
 
@@ -564,7 +916,7 @@ export const fetchFilmDetailByRouteId = async (routeId?: string) => {
 
   try {
     const detail = await invokeTmdb<TmdbItem>(`${mediaType}/${tmdbId}`, {
-      append_to_response: "videos,credits",
+      append_to_response: "videos,credits,images",
     });
     const mapped = toFilm(
       {

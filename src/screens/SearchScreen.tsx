@@ -13,15 +13,19 @@ import AppScreen from "@/src/components/AppScreen";
 import ConnectedFilmRowCard from "@/src/components/ConnectedFilmRowCard";
 import EmptyState from "@/src/components/EmptyState";
 import { SearchSkeleton } from "@/src/components/LoadingSkeletons";
+import { useAuth } from "@/src/context/AuthContext";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { searchFilms } from "@/src/data/mockData";
+import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { fetchSearchResults } from "@/src/lib/tmdb";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle } from "./shared";
 
 export default function SearchScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { watchlists, addFilmToWatchlist } = useWatchlists();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,10 +58,19 @@ export default function SearchScreen() {
     };
   }, [query]);
 
-  const openFilm = (film: Film) =>
+  const openFilm = (film: Film) => {
+    blurActiveElementOnWeb();
+    void logInteractionEvent({
+      userId: user?.id,
+      action: "open",
+      source: "search",
+      tmdbId: film.tmdbId,
+      mediaType: film.mediaType,
+    });
     router.push(
       ({ pathname: "/movie/[id]", params: { id: film.id } } as unknown) as Href,
     );
+  };
 
   const openAddPicker = (film: Film) => {
     setPickerFilm(film);

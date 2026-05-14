@@ -12,7 +12,9 @@ const ALLOWED_ENDPOINT_PATTERNS = [
   /^search\/multi$/,
   /^discover\/(movie|tv)$/,
   /^movie\/\d+$/,
+  /^movie\/\d+\/similar$/,
   /^tv\/\d+$/,
+  /^tv\/\d+\/similar$/,
 ];
 
 type TmdbProxyBody = {
@@ -94,4 +96,3 @@ serve(async (req) => {
 
   return jsonResponse(tmdbResponse.status, parsed);
 });
-

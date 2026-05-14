@@ -7,6 +7,7 @@ import {
   SPACING,
   TYPOGRAPHY,
 } from "@/src/constants/designTokens";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 
 export function SectionTitle({
   title,
@@ -38,7 +39,14 @@ export function CTAButton({
 
   return (
     <Pressable
-      onPress={disabled ? undefined : onPress}
+      onPress={
+        disabled
+          ? undefined
+          : () => {
+              blurActiveElementOnWeb();
+              onPress?.();
+            }
+      }
       style={({ pressed }) => [
         styles.button,
         {

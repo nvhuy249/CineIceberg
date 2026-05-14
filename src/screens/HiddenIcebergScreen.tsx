@@ -6,10 +6,14 @@ import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY, withOpacity } from "@/src/c
 import AppScreen from "@/src/components/AppScreen";
 import FilmCard from "@/src/components/FilmCard";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
+import { useAuth } from "@/src/context/AuthContext";
 import { films, getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
+import { logInteractionEvent } from "@/src/lib/interactionEvents";
+import { safeBack } from "@/src/lib/navigation";
 import { fetchHiddenIcebergCandidates } from "@/src/lib/tmdb";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
@@ -24,6 +28,7 @@ const MAX_SUGGESTIONS = 6;
 
 export default function HiddenIcebergScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { watchlists } = useWatchlists();
   const [candidateFilms, setCandidateFilms] = useState<Film[]>(films);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(true);
@@ -85,11 +90,31 @@ export default function HiddenIcebergScreen() {
     return ranked.slice(0, MAX_SUGGESTIONS);
   }, [candidateFilms, watchlists]);
 
+  const openFilm = (film: Film) => {
+    blurActiveElementOnWeb();
+    void logInteractionEvent({
+      userId: user?.id,
+      action: "open",
+      source: "hidden_iceberg",
+      tmdbId: film.tmdbId,
+      mediaType: film.mediaType,
+    });
+    router.push(
+      ({ pathname: "/movie/[id]", params: { id: film.id } } as unknown) as Href,
+    );
+  };
+
   return (
     <AppScreen
       title="Hidden Iceberg"
       subtitle="You discovered the layer below the surface"
-      headerRight={<CTAButton label="Back" variant="secondary" onPress={() => router.back()} />}
+      headerRight={
+        <CTAButton
+          label="Back"
+          variant="secondary"
+          onPress={() => safeBack(router, "/(tabs)" as Href)}
+        />
+      }
     >
       <View style={styles.heroCard}>
         <TheaterCurtain height={190} style={styles.heroCurtain} />
@@ -111,11 +136,7 @@ export default function HiddenIcebergScreen() {
             <FilmCard
               film={item.film}
               compact
-              onPress={() =>
-                router.push(
-                  ({ pathname: "/movie/[id]", params: { id: item.film.id } } as unknown) as Href,
-                )
-              }
+              onPress={() => openFilm(item.film)}
             />
             <Text style={styles.reasonText}>{item.reason}</Text>
           </View>

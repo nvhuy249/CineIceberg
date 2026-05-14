@@ -34,8 +34,11 @@ import {
   trending as fallbackTrending,
 } from "@/src/data/mockData";
 import { trackEvent } from "@/src/lib/analytics";
+import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
+import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { supabase } from "@/src/lib/supabase";
 import { fetchHomeSections } from "@/src/lib/tmdb";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton } from "./shared";
@@ -108,10 +111,19 @@ export default function HomeScreen() {
     };
   }, [preferredGenres]);
 
-  const openFilm = (film: Film) =>
+  const openFilm = (film: Film) => {
+    blurActiveElementOnWeb();
+    void logInteractionEvent({
+      userId: user?.id,
+      action: "open",
+      source: "home",
+      tmdbId: film.tmdbId,
+      mediaType: film.mediaType,
+    });
     router.push(
       ({ pathname: "/movie/[id]", params: { id: film.id } } as unknown) as Href,
     );
+  };
 
   const triggerHiddenIceberg = () => {
     const now = Date.now();
@@ -128,8 +140,9 @@ export default function HomeScreen() {
     Animated.timing(revealAnimation, {
       toValue: 1,
       duration: 360,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
     }).start(() => {
+      blurActiveElementOnWeb();
       router.push("/iceberg" as Href);
       setTimeout(() => {
         revealInProgressRef.current = false;

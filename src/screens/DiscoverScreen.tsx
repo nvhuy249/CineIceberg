@@ -24,8 +24,13 @@ import MatchScore from "@/src/components/MatchScore";
 import TasteTag from "@/src/components/TasteTag";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { discoverQueue as fallbackDiscoverQueue, tasteTags } from "@/src/data/mockData";
+import { logInteractionEvent } from "@/src/lib/interactionEvents";
+import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
 import { fetchDiscoverQueue } from "@/src/lib/tmdb";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
+import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
@@ -36,8 +41,9 @@ type DiscoverAction = "like" | "pass";
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { addFilmToDiscoverWatchlist } = useWatchlists();
-  const [queue, setQueue] = useState(fallbackDiscoverQueue);
+  const [queue, setQueue] = useState<Film[]>([]);
   const [isQueueLoading, setIsQueueLoading] = useState(false);
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState(0);
@@ -76,7 +82,7 @@ export default function DiscoverScreen() {
   const resetSwipePosition = useCallback(() => {
     Animated.spring(swipe, {
       toValue: { x: 0, y: 0 },
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
       friction: 6,
       tension: 70,
     }).start();
@@ -87,9 +93,18 @@ export default function DiscoverScreen() {
       if (action === "like" && currentFilm) {
         void addFilmToDiscoverWatchlist(currentFilm.tmdbId);
       }
+      if (currentFilm) {
+        void logInteractionEvent({
+          userId: user?.id,
+          action,
+          source: "discover",
+          tmdbId: currentFilm.tmdbId,
+          mediaType: currentFilm.mediaType,
+        });
+      }
       nextCard(action);
     },
-    [addFilmToDiscoverWatchlist, currentFilm, nextCard],
+    [addFilmToDiscoverWatchlist, currentFilm, nextCard, user?.id],
   );
 
   const animateOutAndCommit = useCallback(
@@ -101,7 +116,7 @@ export default function DiscoverScreen() {
       Animated.timing(swipe, {
         toValue: { x: toX, y: 18 },
         duration: 170,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
       }).start(() => {
         swipe.setValue({ x: 0, y: 0 });
         commitAction(action);
@@ -189,27 +204,46 @@ export default function DiscoverScreen() {
       </View>
 
       {!currentFilm ? (
-        <EmptyState
-          title={isQueueLoading ? "Loading cards..." : "No more cards"}
-          message={
-            isQueueLoading
-              ? "Fetching the next discover queue."
-              : "You've reached the end of the discover queue."
-          }
-          action={
-            <CTAButton
-              label={isQueueLoading ? "Loading..." : "Restart Deck"}
-              disabled={isQueueLoading}
-              onPress={() => {
-                if (queue.length > 0) {
-                  setIndex(0);
-                  return;
-                }
-                void loadQueue();
-              }}
-            />
-          }
-        />
+        isQueueLoading ? (
+          <View style={styles.stageShell}>
+            <View style={styles.stageCurtainWrap}>
+              <TheaterCurtain height={116} style={StyleSheet.absoluteFillObject} />
+            </View>
+            <View style={styles.stageDeck}>
+              <View style={styles.stageGlow} />
+              <View style={styles.blankSwipeCard}>
+                <View style={styles.blankPoster} />
+                <View style={styles.blankBody}>
+                  <View style={styles.blankTitleLine} />
+                  <View style={styles.blankMetaLine} />
+                  <View style={styles.blankTagRow}>
+                    <View style={styles.blankTag} />
+                    <View style={styles.blankTag} />
+                  </View>
+                  <View style={styles.blankSynopsisLine} />
+                  <View style={styles.blankSynopsisLineShort} />
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <EmptyState
+            title="No more cards"
+            message="You've reached the end of the discover queue."
+            action={
+              <CTAButton
+                label="Restart Deck"
+                onPress={() => {
+                  if (queue.length > 0) {
+                    setIndex(0);
+                    return;
+                  }
+                  void loadQueue();
+                }}
+              />
+            }
+          />
+        )
       ) : (
         <>
           <View style={styles.stageShell}>
@@ -220,7 +254,7 @@ export default function DiscoverScreen() {
               <View style={styles.stageGlow} />
               <View style={styles.cardStack}>
                 {nextFilm ? (
-                  <View pointerEvents="none" style={styles.nextCardLayer}>
+                  <View style={[styles.nextCardLayer, styles.noPointerEvents]}>
                     <FilmCard film={nextFilm} variant="swipe" />
                   </View>
                 ) : null}
@@ -260,14 +294,22 @@ export default function DiscoverScreen() {
             <ActionButton label="Pass" onPress={() => animateOutAndCommit("pass")} />
             <ActionButton
               label="Info"
-              onPress={() =>
+              onPress={() => {
+                blurActiveElementOnWeb();
+                void logInteractionEvent({
+                  userId: user?.id,
+                  action: "open",
+                  source: "discover",
+                  tmdbId: currentFilm.tmdbId,
+                  mediaType: currentFilm.mediaType,
+                });
                 router.push(
                   (({
                     pathname: "/movie/[id]",
                     params: { id: currentFilm.id },
                   } as unknown) as Href),
-                )
-              }
+                );
+              }}
             />
             <ActionButton label="Like" onPress={() => animateOutAndCommit("like")} />
           </View>
@@ -324,6 +366,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
+  },
+  noPointerEvents: {
+    pointerEvents: "none",
   },
   stageGlow: {
     position: "absolute",
@@ -393,5 +438,56 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.9,
+  },
+  blankSwipeCard: {
+    borderRadius: BORDER_RADIUS.card,
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.theater.marqueeGold, 0.3),
+    overflow: "hidden",
+    backgroundColor: COLORS.background.elevated,
+  },
+  blankPoster: {
+    height: 220,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border.default,
+  },
+  blankBody: {
+    padding: SPACING.padding.card,
+    gap: SPACING.sm,
+  },
+  blankTitleLine: {
+    width: "72%",
+    height: 20,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.12),
+  },
+  blankMetaLine: {
+    width: "52%",
+    height: 14,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
+  },
+  blankTagRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  blankTag: {
+    width: 72,
+    height: 24,
+    borderRadius: BORDER_RADIUS.pill,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
+  },
+  blankSynopsisLine: {
+    width: "100%",
+    height: 14,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
+  },
+  blankSynopsisLineShort: {
+    width: "76%",
+    height: 14,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
   },
 });

@@ -151,45 +151,27 @@ export const BORDER_RADIUS = {
 
 export const SHADOWS = {
   none: {
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
+    boxShadow: "none",
     elevation: 0,
   },
   sm: {
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.16,
-    shadowRadius: 2,
+    boxShadow: "0px 1px 2px rgba(0, 0, 0, 0.16)",
     elevation: 1,
   },
   md: {
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
+    boxShadow: "0px 3px 6px rgba(0, 0, 0, 0.22)",
     elevation: 3,
   },
   iceGlowSm: {
-    shadowColor: COLORS.accent.iceBlue,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    boxShadow: `0px 0px 8px ${withOpacity(COLORS.accent.iceBlue, 0.2)}`,
     elevation: 0,
   },
   iceGlowMd: {
-    shadowColor: COLORS.accent.iceBlue,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
+    boxShadow: `0px 0px 14px ${withOpacity(COLORS.accent.iceBlue, 0.28)}`,
     elevation: 0,
   },
   theaterSpotlight: {
-    shadowColor: COLORS.theater.spotlight,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    boxShadow: `0px 0px 12px ${withOpacity(COLORS.theater.spotlight, 0.2)}`,
     elevation: 0,
   },
 } as const;

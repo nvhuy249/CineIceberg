@@ -15,6 +15,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { supabase } from "@/src/lib/supabase";
 import { fetchSearchResultsStrict } from "@/src/lib/tmdb";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton, SectionTitle } from "./shared";
@@ -122,6 +123,7 @@ export default function OnboardingFilmsScreen() {
         selectedFilms.map((film) => addFilmToDiscoverWatchlist(film.tmdbId)),
       );
 
+      blurActiveElementOnWeb();
       router.replace("/(tabs)" as Href);
     } catch (error) {
       setSubmitError(

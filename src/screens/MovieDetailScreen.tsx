@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Image } from "expo-image";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
   BORDER_RADIUS,
@@ -17,6 +17,7 @@ import MatchScore from "@/src/components/MatchScore";
 import TasteTag from "@/src/components/TasteTag";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { getFilmById } from "@/src/data/mockData";
+import { safeBack } from "@/src/lib/navigation";
 import { fetchFilmDetailByRouteId } from "@/src/lib/tmdb";
 import type { Film } from "@/src/types/film";
 
@@ -88,7 +89,7 @@ export default function MovieDetailScreen() {
     const added = await addFilmToWatchlist(
       watchlistId,
       film.tmdbId,
-      "manual",
+      "movie_detail",
       film.mediaType,
     );
     setIsAddingWatchlistId(null);
@@ -106,7 +107,13 @@ export default function MovieDetailScreen() {
     <AppScreen
       title={film?.title ?? "Movie Detail"}
       subtitle={film ? `${film.year} | ${film.director}` : "Detail view"}
-      headerRight={<CTAButton label="Back" variant="secondary" onPress={() => router.back()} />}
+      headerRight={
+        <CTAButton
+          label="Back"
+          variant="secondary"
+          onPress={() => safeBack(router, "/(tabs)" as Href)}
+        />
+      }
     >
       {loading ? <MovieDetailSkeleton /> : null}
 
@@ -123,28 +130,65 @@ export default function MovieDetailScreen() {
       {!loading && film ? (
         <>
           <View style={styles.heroCard}>
-            <View style={[styles.poster, { backgroundColor: film.posterColor }]}>
-              {film.posterUrl ? (
+            <View style={styles.backdropFrame}>
+              {film.backdropUrl || film.posterUrl ? (
                 <Image
-                  source={{ uri: film.posterUrl }}
-                  style={styles.posterImage}
-                  contentFit="cover"
+                  source={{ uri: film.backdropUrl || film.posterUrl || "" }}
+                  style={styles.backdropImage}
+                  contentFit="contain"
                   transition={160}
                 />
               ) : null}
             </View>
             <View style={styles.heroBody}>
-              <View style={screenStyles.wrapRow}>
-                <MatchScore score={film.matchScore} />
-                {film.genres.slice(0, 3).map((genre) => (
-                  <TasteTag key={genre} label={genre} />
-                ))}
+              <View style={styles.heroPrimaryRow}>
+                <View style={[styles.posterPanel, { backgroundColor: film.posterColor }]}>
+                  {film.posterUrl ? (
+                    <Image
+                      source={{ uri: film.posterUrl }}
+                      style={styles.posterImage}
+                      contentFit="contain"
+                      transition={160}
+                    />
+                  ) : null}
+                </View>
+                <View style={styles.heroMeta}>
+                  <View style={screenStyles.wrapRow}>
+                    <MatchScore score={film.matchScore} />
+                    {film.genres.slice(0, 3).map((genre) => (
+                      <TasteTag key={genre} label={genre} />
+                    ))}
+                  </View>
+                  <Text style={screenStyles.mutedText}>
+                    {film.runtimeMinutes} min | {film.year}
+                  </Text>
+                  <Text style={styles.directorText}>By {film.director}</Text>
+                  <CTAButton label="Add to Watchlists" onPress={openWatchlistPicker} />
+                  {addFeedback ? <Text style={styles.addFeedback}>{addFeedback}</Text> : null}
+                </View>
               </View>
-              <Text style={screenStyles.mutedText}>
-                {film.runtimeMinutes} min | {film.year}
-              </Text>
-              <CTAButton label="Add to Watchlists" onPress={openWatchlistPicker} />
-              {addFeedback ? <Text style={styles.addFeedback}>{addFeedback}</Text> : null}
+
+              {(film.imageGalleryUrls?.length ?? 0) > 0 ? (
+                <View style={styles.galleryBlock}>
+                  <Text style={styles.galleryTitle}>Gallery</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.galleryRow}
+                  >
+                    {film.imageGalleryUrls?.map((url, index) => (
+                      <View key={`${url}-${index}`} style={styles.galleryTile}>
+                        <Image
+                          source={{ uri: url }}
+                          style={styles.galleryImage}
+                          contentFit="contain"
+                          transition={120}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -263,23 +307,81 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.card,
     overflow: "hidden",
   },
-  poster: {
-    height: 220,
+  backdropFrame: {
+    minHeight: 160,
+    maxHeight: 220,
+    aspectRatio: 16 / 9,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
     overflow: "hidden",
+    backgroundColor: withOpacity(COLORS.background.primary, 0.6),
   },
-  posterImage: {
-    ...StyleSheet.absoluteFillObject,
+  backdropImage: {
+    width: "100%",
+    height: "100%",
   },
   heroBody: {
     padding: SPACING.padding.card,
     gap: SPACING.sm,
   },
+  heroPrimaryRow: {
+    flexDirection: "row",
+    gap: SPACING.md,
+    alignItems: "flex-start",
+  },
+  posterPanel: {
+    width: 110,
+    aspectRatio: 2 / 3,
+    borderRadius: BORDER_RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  posterImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroMeta: {
+    flex: 1,
+    gap: SPACING.sm,
+  },
+  directorText: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
   addFeedback: {
     color: COLORS.foreground.secondary,
     fontSize: TYPOGRAPHY.fontSize.xs,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  galleryBlock: {
+    gap: SPACING.xs,
+  },
+  galleryTitle: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    textTransform: "uppercase",
+    letterSpacing: TYPOGRAPHY.letterSpacing.wide,
+  },
+  galleryRow: {
+    gap: SPACING.xs,
+    paddingRight: SPACING.xs,
+  },
+  galleryTile: {
+    width: 132,
+    height: 88,
+    borderRadius: BORDER_RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    backgroundColor: withOpacity(COLORS.background.primary, 0.55),
+    overflow: "hidden",
+  },
+  galleryImage: {
+    width: "100%",
+    height: "100%",
   },
   tabsRow: {
     flexDirection: "row",

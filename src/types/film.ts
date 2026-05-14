@@ -8,6 +8,8 @@ export type Film = {
   tmdbId: number;
   mediaType: "movie" | "tv";
   posterUrl?: string | null;
+  backdropUrl?: string | null;
+  imageGalleryUrls?: string[];
   title: string;
   year: number;
   runtimeMinutes: number;

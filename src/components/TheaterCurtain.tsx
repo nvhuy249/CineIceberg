@@ -13,6 +13,7 @@ import {
   THEATER_THEME,
   withOpacity,
 } from "@/src/constants/designTokens";
+import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
 
 type TheaterCurtainProps = {
   height?: number;
@@ -28,12 +29,12 @@ export default function TheaterCurtain({ height = 200, style }: TheaterCurtainPr
         Animated.timing(sway, {
           toValue: 1,
           duration: 2500,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
         }),
         Animated.timing(sway, {
           toValue: 0,
           duration: 2500,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
         }),
       ]),
     );

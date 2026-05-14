@@ -7,6 +7,7 @@ import TasteTag from "@/src/components/TasteTag";
 import { useAuth } from "@/src/context/AuthContext";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { tasteTags } from "@/src/data/mockData";
+import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 
 import { CTAButton, SectionTitle, screenStyles } from "./shared";
 
@@ -50,6 +51,7 @@ export default function ProfileScreen() {
               void (async () => {
                 setSigningOut(true);
                 setSignOutError(null);
+                blurActiveElementOnWeb();
                 const { error } = await signOut();
                 if (error) setSignOutError(error);
                 setSigningOut(false);

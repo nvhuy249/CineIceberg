@@ -11,7 +11,9 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { getFilmById, getFilmByTmdbId } from "@/src/data/mockData";
+import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { supabase, SUPABASE_CONFIG_ERROR } from "@/src/lib/supabase";
+import { fetchFilmDetailByRouteId } from "@/src/lib/tmdb";
 import type { Database } from "@/src/types/db";
 import type { Watchlist, WatchlistLayoutSize } from "@/src/types/watchlist";
 
@@ -47,12 +49,17 @@ type WatchlistItemLookupRow = Pick<
   Database["public"]["Tables"]["watchlist_items"]["Row"],
   "id" | "tmdb_id" | "media_type" | "metadata"
 >;
+type WatchlistItemHydrationRow = Pick<
+  Database["public"]["Tables"]["watchlist_items"]["Row"],
+  "watchlist_id" | "tmdb_id" | "media_type" | "metadata"
+>;
 
 type WatchlistItemSource =
   | "discover"
   | "search"
   | "hidden_iceberg"
   | "recommendation"
+  | "movie_detail"
   | "manual";
 
 const WatchlistsContext = createContext<WatchlistsContextValue | undefined>(
@@ -128,6 +135,33 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const prefetchMissingFilmDetails = useCallback(async (itemRows: WatchlistItemHydrationRow[]) => {
+    const uniqueByKey = new Map<string, { tmdbId: number; mediaType: "movie" | "tv" }>();
+
+    itemRows.forEach((item) => {
+      const tmdbId = parseTmdbIdFromItem(item);
+      if (!tmdbId) return;
+
+      const mediaType = item.media_type === "tv" ? "tv" : "movie";
+      uniqueByKey.set(`${mediaType}:${tmdbId}`, { tmdbId, mediaType });
+    });
+
+    const fetchTargets = [...uniqueByKey.values()].filter(({ tmdbId }) => {
+      const cached = getFilmByTmdbId(tmdbId);
+      return !cached?.posterUrl;
+    });
+
+    if (fetchTargets.length === 0) return false;
+
+    const settled = await Promise.allSettled(
+      fetchTargets.map(({ tmdbId, mediaType }) =>
+        fetchFilmDetailByRouteId(`tmdb-${mediaType}-${tmdbId}`),
+      ),
+    );
+
+    return settled.some((result) => result.status === "fulfilled" && Boolean(result.value));
+  }, []);
+
   const hydrateWatchlists = useCallback(async (userId: string) => {
     if (!supabase) {
       throw new Error(SUPABASE_CONFIG_ERROR);
@@ -144,7 +178,12 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
     }
 
     const rows = watchlistRows ?? [];
-    if (rows.length === 0) return [];
+    if (rows.length === 0) {
+      return {
+        watchlists: [] as Watchlist[],
+        itemRows: [] as WatchlistItemHydrationRow[],
+      };
+    }
 
     const watchlistIds = rows.map((row) => row.id);
     const { data: itemRows, error: itemsError } = await supabase
@@ -159,7 +198,8 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
     }
 
     const filmIdsByWatchlist = new Map<string, number[]>();
-    (itemRows ?? []).forEach((item) => {
+    const hydratedItemRows = (itemRows ?? []) as WatchlistItemHydrationRow[];
+    hydratedItemRows.forEach((item) => {
       const tmdbId = parseTmdbIdFromItem(item);
       if (!tmdbId) return;
 
@@ -168,9 +208,12 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
       filmIdsByWatchlist.set(item.watchlist_id, values);
     });
 
-    return rows.map((row) =>
-      toWatchlistModel(row, filmIdsByWatchlist.get(row.id) ?? []),
-    );
+    return {
+      watchlists: rows.map((row) =>
+        toWatchlistModel(row, filmIdsByWatchlist.get(row.id) ?? []),
+      ),
+      itemRows: hydratedItemRows,
+    };
   }, []);
 
   const refreshWatchlists = useCallback(async () => {
@@ -183,14 +226,15 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const nextWatchlists = await hydrateWatchlists(user.id);
+      const { watchlists: nextWatchlists, itemRows } = await hydrateWatchlists(user.id);
+      await prefetchMissingFilmDetails(itemRows);
       setWatchlists(nextWatchlists);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to load watchlists.");
     } finally {
       setIsLoading(false);
     }
-  }, [hydrateWatchlists, user]);
+  }, [hydrateWatchlists, prefetchMissingFilmDetails, user]);
 
   useEffect(() => {
     let active = true;
@@ -208,7 +252,9 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
         if (!active) return;
         setIsLoading(true);
         setLoadError(null);
-        const nextWatchlists = await hydrateWatchlists(user.id);
+        const { watchlists: nextWatchlists, itemRows } = await hydrateWatchlists(user.id);
+        if (!active) return;
+        await prefetchMissingFilmDetails(itemRows);
         if (!active) return;
         setWatchlists(nextWatchlists);
       } catch (error) {
@@ -224,7 +270,7 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [hydrateWatchlists, user]);
+  }, [hydrateWatchlists, prefetchMissingFilmDetails, user]);
 
   const createWatchlist = useCallback(
     async (name: string, description = "") => {
@@ -335,6 +381,19 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
           };
         }),
       );
+
+      void logInteractionEvent({
+        userId,
+        tmdbId,
+        mediaType,
+        action: "add",
+        source: source === "recommendation" ? "watchlist_recommendation" : source,
+        sourceWatchlistId: watchlistId,
+        metadata: {
+          watchlist_id: watchlistId,
+        },
+      });
+
       return true;
     },
     [user],
@@ -398,6 +457,19 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
           };
         }),
       );
+
+      void logInteractionEvent({
+        userId,
+        tmdbId,
+        mediaType: mediaType ?? film?.mediaType ?? "movie",
+        action: "remove",
+        source: "watchlist_detail",
+        sourceWatchlistId: watchlistId,
+        metadata: {
+          watchlist_id: watchlistId,
+        },
+      });
+
       return true;
     },
     [user],

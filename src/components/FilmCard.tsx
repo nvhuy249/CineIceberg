@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   cardSwipe: {
     borderColor: withOpacity(COLORS.theater.marqueeGold, 0.3),
-    backgroundColor: withOpacity(COLORS.theater.stage, 0.5),
+    backgroundColor: COLORS.background.elevated,
   },
   poster: {
     width: "100%",
