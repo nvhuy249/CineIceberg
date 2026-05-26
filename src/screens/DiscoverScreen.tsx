@@ -18,62 +18,99 @@ import {
   withOpacity,
 } from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
+import CurtainTransition from "@/src/components/CurtainTransition";
 import EmptyState from "@/src/components/EmptyState";
 import FilmCard from "@/src/components/FilmCard";
-import MatchScore from "@/src/components/MatchScore";
 import TasteTag from "@/src/components/TasteTag";
-import TheaterCurtain from "@/src/components/TheaterCurtain";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { useAuth } from "@/src/context/AuthContext";
-import { discoverQueue as fallbackDiscoverQueue, tasteTags } from "@/src/data/mockData";
+import { discoverQueue as fallbackDiscoverQueue } from "@/src/data/mockData";
 import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
+import { supabase } from "@/src/lib/supabase";
 import { fetchDiscoverQueue } from "@/src/lib/tmdb";
 import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
-import { CTAButton, SectionTitle, screenStyles } from "./shared";
+import { CTAButton } from "./shared";
 
 const SWIPE_TRIGGER = 92;
 const SWIPE_OUT_DISTANCE = 420;
 
 type DiscoverAction = "like" | "pass";
+type DiscoverHistoryItem = {
+  index: number;
+  action: DiscoverAction;
+  film: Film;
+  addedToDiscover: boolean;
+};
 
 export default function DiscoverScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { addFilmToDiscoverWatchlist } = useWatchlists();
+  const { addFilmToDiscoverWatchlist, removeFilmFromDiscoverWatchlist } = useWatchlists();
   const [queue, setQueue] = useState<Film[]>([]);
   const [isQueueLoading, setIsQueueLoading] = useState(false);
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState(0);
   const [passed, setPassed] = useState(0);
-  const [, setHistory] = useState<{ index: number; action: DiscoverAction }[]>([]);
+  const [, setHistory] = useState<DiscoverHistoryItem[]>([]);
   const swipe = useRef(new Animated.ValueXY()).current;
   const actionLockRef = useRef(false);
+  const pendingSwipeResetRef = useRef(false);
 
   const currentFilm = queue[index];
   const nextFilm = queue[index + 1];
   const remaining = Math.max(queue.length - index, 0);
 
+  const loadSeenDiscoverTmdbIds = useCallback(async () => {
+    if (!supabase || !user?.id) return new Set<number>();
+
+    const { data, error } = await supabase
+      .from("interaction_events")
+      .select("tmdb_id")
+      .eq("user_id", user.id)
+      .eq("source", "discover")
+      .in("action", ["like", "pass"])
+      .limit(1000);
+
+    if (error || !data) return new Set<number>();
+    return new Set(data.map((event) => event.tmdb_id));
+  }, [user?.id]);
+
   const loadQueue = useCallback(async () => {
     setIsQueueLoading(true);
     try {
-      const remoteQueue = await fetchDiscoverQueue();
-      setQueue(remoteQueue.length > 0 ? remoteQueue : fallbackDiscoverQueue);
+      const [remoteQueue, seenTmdbIds] = await Promise.all([
+        fetchDiscoverQueue(),
+        loadSeenDiscoverTmdbIds(),
+      ]);
+      const sourceQueue = remoteQueue.length > 0 ? remoteQueue : fallbackDiscoverQueue;
+      setQueue(sourceQueue.filter((film) => !seenTmdbIds.has(film.tmdbId)));
+      setIndex(0);
+      setLiked(0);
+      setPassed(0);
+      setHistory([]);
     } catch {
       setQueue(fallbackDiscoverQueue);
     } finally {
       setIsQueueLoading(false);
     }
-  }, []);
+  }, [loadSeenDiscoverTmdbIds]);
 
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
 
-  const nextCard = useCallback((action: DiscoverAction) => {
-    setHistory((values) => [...values, { index, action }]);
+  useEffect(() => {
+    if (!pendingSwipeResetRef.current) return;
+    swipe.setValue({ x: 0, y: 0 });
+    pendingSwipeResetRef.current = false;
+    actionLockRef.current = false;
+  }, [index, swipe]);
+
+  const nextCard = useCallback((action: DiscoverAction, film: Film, addedToDiscover: boolean) => {
+    setHistory((values) => [...values, { index, action, film, addedToDiscover }]);
     setIndex((value) => Math.min(value + 1, queue.length));
     if (action === "like") setLiked((value) => value + 1);
     if (action === "pass") setPassed((value) => value + 1);
@@ -90,19 +127,19 @@ export default function DiscoverScreen() {
 
   const commitAction = useCallback(
     (action: DiscoverAction) => {
-      if (action === "like" && currentFilm) {
+      if (!currentFilm) return;
+
+      if (action === "like") {
         void addFilmToDiscoverWatchlist(currentFilm.tmdbId);
       }
-      if (currentFilm) {
-        void logInteractionEvent({
-          userId: user?.id,
-          action,
-          source: "discover",
-          tmdbId: currentFilm.tmdbId,
-          mediaType: currentFilm.mediaType,
-        });
-      }
-      nextCard(action);
+      void logInteractionEvent({
+        userId: user?.id,
+        action,
+        source: "discover",
+        tmdbId: currentFilm.tmdbId,
+        mediaType: currentFilm.mediaType,
+      });
+      nextCard(action, currentFilm, action === "like");
     },
     [addFilmToDiscoverWatchlist, currentFilm, nextCard, user?.id],
   );
@@ -118,9 +155,8 @@ export default function DiscoverScreen() {
         duration: 170,
         useNativeDriver: USE_NATIVE_ANIMATED_DRIVER,
       }).start(() => {
-        swipe.setValue({ x: 0, y: 0 });
+        pendingSwipeResetRef.current = true;
         commitAction(action);
-        actionLockRef.current = false;
       });
     },
     [commitAction, currentFilm, swipe],
@@ -135,6 +171,12 @@ export default function DiscoverScreen() {
         setIndex(previous.index);
         if (previous.action === "like") {
           setLiked((value) => Math.max(value - 1, 0));
+          if (previous.addedToDiscover) {
+            void removeFilmFromDiscoverWatchlist(
+              previous.film.tmdbId,
+              previous.film.mediaType,
+            );
+          }
         } else {
           setPassed((value) => Math.max(value - 1, 0));
         }
@@ -143,8 +185,6 @@ export default function DiscoverScreen() {
       return copy;
     });
   };
-
-  const discoverSignals = useMemo(() => tasteTags.slice(0, 3), []);
 
   const panResponder = useMemo(
     () =>
@@ -190,25 +230,15 @@ export default function DiscoverScreen() {
   });
 
   return (
-    <AppScreen title="Discover" subtitle="Stage mode: quick cinematic taste picks">
-      <View style={styles.statsCard}>
-        <SectionTitle
-          title={`${remaining} scenes remaining`}
-          subtitle={`${liked} liked | ${passed} passed`}
-        />
-        <View style={screenStyles.wrapRow}>
-          {discoverSignals.map((tag) => (
-            <TasteTag key={tag} label={tag} />
-          ))}
-        </View>
-      </View>
-
+    <CurtainTransition openDelay={160}>
+      <AppScreen
+        title="Discover"
+        subtitle={`${remaining} scenes remaining | ${liked} liked | ${passed} passed`}
+        scroll={false}
+      >
       {!currentFilm ? (
         isQueueLoading ? (
           <View style={styles.stageShell}>
-            <View style={styles.stageCurtainWrap}>
-              <TheaterCurtain height={116} style={StyleSheet.absoluteFillObject} />
-            </View>
             <View style={styles.stageDeck}>
               <View style={styles.stageGlow} />
               <View style={styles.blankSwipeCard}>
@@ -247,15 +277,12 @@ export default function DiscoverScreen() {
       ) : (
         <>
           <View style={styles.stageShell}>
-            <View style={styles.stageCurtainWrap}>
-              <TheaterCurtain height={116} style={StyleSheet.absoluteFillObject} />
-            </View>
             <View style={styles.stageDeck}>
               <View style={styles.stageGlow} />
               <View style={styles.cardStack}>
                 {nextFilm ? (
                   <View style={[styles.nextCardLayer, styles.noPointerEvents]}>
-                    <FilmCard film={nextFilm} variant="swipe" />
+                    <FilmCard film={nextFilm} variant="swipe" compact />
                   </View>
                 ) : null}
                 <Animated.View
@@ -271,9 +298,8 @@ export default function DiscoverScreen() {
                   ]}
                   {...panResponder.panHandlers}
                 >
-                  <FilmCard film={currentFilm} variant="swipe" />
+                  <FilmCard film={currentFilm} variant="swipe" compact />
                   <View style={styles.overlayRow}>
-                    <MatchScore score={currentFilm.matchScore} />
                     {currentFilm.genres.slice(0, 2).map((genre) => (
                       <TasteTag key={genre} label={genre} />
                     ))}
@@ -315,7 +341,8 @@ export default function DiscoverScreen() {
           </View>
         </>
       )}
-    </AppScreen>
+      </AppScreen>
+    </CurtainTransition>
   );
 }
 
@@ -331,14 +358,6 @@ function ActionButton({ label, onPress }: { label: string; onPress: () => void }
 }
 
 const styles = StyleSheet.create({
-  statsCard: {
-    backgroundColor: withOpacity(COLORS.theater.stage, 0.54),
-    borderWidth: 1,
-    borderColor: withOpacity(COLORS.theater.marqueeGold, 0.28),
-    borderRadius: BORDER_RADIUS.card,
-    padding: SPACING.padding.card,
-    gap: SPACING.sm,
-  },
   stageShell: {
     borderRadius: BORDER_RADIUS.card,
     overflow: "hidden",
@@ -347,12 +366,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background.elevated,
     ...SHADOWS.theaterSpotlight,
   },
-  stageCurtainWrap: {
-    height: 116,
-  },
   stageDeck: {
-    padding: SPACING.md,
-    gap: SPACING.sm,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
     backgroundColor: withOpacity(COLORS.theater.stage, 0.5),
     position: "relative",
   },
@@ -374,17 +390,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 26,
     right: 26,
-    top: 12,
-    height: 110,
+    top: 8,
+    height: 80,
     borderRadius: 140,
     backgroundColor: withOpacity(COLORS.theater.spotlight, 0.18),
   },
   swipeHint: {
     position: "absolute",
-    top: 16,
-    minHeight: 34,
-    minWidth: 76,
-    paddingHorizontal: SPACING.md,
+    top: 10,
+    minHeight: 30,
+    minWidth: 68,
+    paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.pill,
     borderWidth: 1,
     alignItems: "center",
@@ -410,19 +426,19 @@ const styles = StyleSheet.create({
   overlayRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.sm,
+    gap: SPACING.xs,
     paddingHorizontal: SPACING.xs,
   },
   actionsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.sm,
+    gap: SPACING.xs,
     justifyContent: "space-between",
   },
   actionButton: {
     flexGrow: 1,
     minWidth: "22%",
-    minHeight: 42,
+    minHeight: 36,
     borderRadius: BORDER_RADIUS.button,
     borderWidth: 1,
     borderColor: withOpacity(COLORS.theater.marqueeGold, 0.24),
@@ -447,14 +463,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background.elevated,
   },
   blankPoster: {
-    height: 220,
+    height: 168,
     backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
   },
   blankBody: {
-    padding: SPACING.padding.card,
-    gap: SPACING.sm,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
   },
   blankTitleLine: {
     width: "72%",

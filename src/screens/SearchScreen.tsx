@@ -194,21 +194,28 @@ export default function SearchScreen() {
               />
             ) : (
               <View style={styles.modalList}>
-                {watchlists.map((watchlist) => (
-                  <CTAButton
-                    key={watchlist.id}
-                    label={
-                      isAddingWatchlistId === watchlist.id
-                        ? `Adding to ${watchlist.name}...`
-                        : `${watchlist.name} (${watchlist.filmIds.length})`
-                    }
-                    variant="secondary"
-                    disabled={Boolean(isAddingWatchlistId)}
-                    onPress={() => {
-                      void handleAddToWatchlist(watchlist.id);
-                    }}
-                  />
-                ))}
+                {watchlists.map((watchlist) => {
+                  const alreadySaved = pickerFilm
+                    ? watchlist.filmIds.includes(pickerFilm.tmdbId)
+                    : false;
+                  return (
+                    <CTAButton
+                      key={watchlist.id}
+                      label={
+                        isAddingWatchlistId === watchlist.id
+                          ? `Adding to ${watchlist.name}...`
+                          : alreadySaved
+                            ? `Already in ${watchlist.name}`
+                            : `${watchlist.name} (${watchlist.filmIds.length})`
+                      }
+                      variant="secondary"
+                      disabled={Boolean(isAddingWatchlistId) || alreadySaved}
+                      onPress={() => {
+                        void handleAddToWatchlist(watchlist.id);
+                      }}
+                    />
+                  );
+                })}
               </View>
             )}
           </View>

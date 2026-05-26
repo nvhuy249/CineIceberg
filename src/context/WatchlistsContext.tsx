@@ -38,6 +38,10 @@ type WatchlistsContextValue = {
   ) => Promise<boolean>;
   deleteWatchlist: (watchlistId: string) => Promise<boolean>;
   addFilmToDiscoverWatchlist: (tmdbId: number) => Promise<boolean>;
+  removeFilmFromDiscoverWatchlist: (
+    tmdbId: number,
+    mediaType?: "movie" | "tv",
+  ) => Promise<boolean>;
 };
 
 type WatchlistRow = Database["public"]["Tables"]["watchlists"]["Row"];
@@ -61,6 +65,7 @@ type WatchlistItemSource =
   | "recommendation"
   | "movie_detail"
   | "manual";
+type WatchlistItemAddedFrom = Exclude<WatchlistItemSource, "movie_detail">;
 
 const WatchlistsContext = createContext<WatchlistsContextValue | undefined>(
   undefined,
@@ -79,6 +84,11 @@ const slugify = (value: string) =>
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "");
+
+const toWatchlistItemAddedFrom = (source: WatchlistItemSource): WatchlistItemAddedFrom => {
+  if (source === "movie_detail") return "manual";
+  return source;
+};
 
 const pickFromList = <T,>(values: T[], seed: number) => {
   const index = Math.abs(seed) % values.length;
@@ -358,7 +368,7 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
         user_id: userId,
         tmdb_id: tmdbId,
         media_type: mediaType,
-        added_from: source,
+        added_from: toWatchlistItemAddedFrom(source),
         metadata: film ? { film_id: film.id } : {},
       };
 
@@ -562,6 +572,15 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
     [addFilmToWatchlist, ensureDiscoverWatchlist],
   );
 
+  const removeFilmFromDiscoverWatchlist = useCallback(
+    async (tmdbId: number, mediaType?: "movie" | "tv") => {
+      const discover = await ensureDiscoverWatchlist();
+      if (!discover) return false;
+      return removeFilmFromWatchlist(discover.id, tmdbId, mediaType);
+    },
+    [ensureDiscoverWatchlist, removeFilmFromWatchlist],
+  );
+
   const value = useMemo<WatchlistsContextValue>(
     () => ({
       watchlists,
@@ -573,6 +592,7 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
       removeFilmFromWatchlist,
       deleteWatchlist,
       addFilmToDiscoverWatchlist,
+      removeFilmFromDiscoverWatchlist,
     }),
     [
       addFilmToDiscoverWatchlist,
@@ -582,6 +602,7 @@ export function WatchlistsProvider({ children }: PropsWithChildren) {
       isLoading,
       loadError,
       removeFilmFromWatchlist,
+      removeFilmFromDiscoverWatchlist,
       refreshWatchlists,
       watchlists,
     ],

@@ -30,7 +30,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import {
   discoverQueue as fallbackDiscoverQueue,
   featuredFilm as fallbackFeaturedFilm,
-  hiddenGems as fallbackHiddenGems,
+  hiddenGems as fallbackTopRated,
   trending as fallbackTrending,
 } from "@/src/data/mockData";
 import { trackEvent } from "@/src/lib/analytics";
@@ -44,8 +44,8 @@ import type { Film } from "@/src/types/film";
 import { CTAButton } from "./shared";
 
 const FALLBACK_HOME_SECTIONS = {
-  featuredFilm: fallbackFeaturedFilm,
-  hiddenGems: fallbackHiddenGems,
+  featuredFilm: fallbackTrending[0] ?? fallbackFeaturedFilm,
+  topRated: fallbackTopRated,
   trending: fallbackTrending,
   discoverQueue: fallbackDiscoverQueue,
 };
@@ -190,19 +190,23 @@ export default function HomeScreen() {
       ) : (
         <Pressable style={styles.featuredCard} onPress={() => openFilm(homeSections.featuredFilm)}>
           <View style={styles.featuredPoster}>
-            {homeSections.featuredFilm.posterUrl ? (
+            {homeSections.featuredFilm.backdropUrl || homeSections.featuredFilm.posterUrl ? (
               <Image
-                source={{ uri: homeSections.featuredFilm.posterUrl }}
+                source={{
+                  uri:
+                    homeSections.featuredFilm.backdropUrl ||
+                    homeSections.featuredFilm.posterUrl ||
+                    "",
+                }}
                 style={StyleSheet.absoluteFillObject}
                 contentFit="cover"
                 transition={160}
               />
             ) : null}
-            <TheaterCurtain style={StyleSheet.absoluteFillObject} />
             <View
               style={[
                 styles.featuredTint,
-                { backgroundColor: withOpacity(homeSections.featuredFilm.posterColor, 0.24) },
+                { backgroundColor: withOpacity(COLORS.background.primary, 0.18) },
               ]}
             />
             <View style={styles.featuredPill}>
@@ -223,16 +227,16 @@ export default function HomeScreen() {
       )}
 
       <HorizontalFilmRail
-        title="Hidden Gems"
-        subtitle="Low-noise picks matched to your taste"
-        films={homeSections.hiddenGems}
+        title="Trending"
+        subtitle="Popular movies and shows right now"
+        films={homeSections.trending}
         onFilmPress={openFilm}
       />
 
       <HorizontalFilmRail
-        title="Trending"
-        subtitle="What your taste profile is leaning toward"
-        films={homeSections.trending}
+        title="Top Movies/Series"
+        subtitle="High-rated movies and shows from TMDB"
+        films={homeSections.topRated}
         onFilmPress={openFilm}
       />
 

@@ -34,6 +34,12 @@ type TmdbCreditsPayload = {
 
 type TmdbImageAsset = {
   file_path?: string;
+  iso_639_1?: string | null;
+  aspect_ratio?: number;
+  width?: number;
+  height?: number;
+  vote_average?: number;
+  vote_count?: number;
 };
 
 type TmdbImagesPayload = {
@@ -75,7 +81,7 @@ type TmdbListResponse = {
 
 type HomeSections = {
   featuredFilm: Film;
-  hiddenGems: Film[];
+  topRated: Film[];
   trending: Film[];
   discoverQueue: Film[];
 };
@@ -157,6 +163,8 @@ const MOVIE_GENRE_IDS_BY_NAME = toGenreIdLookup(MOVIE_GENRES);
 const TV_GENRE_IDS_BY_NAME = toGenreIdLookup(TV_GENRES);
 
 const withFallback = <T,>(value: T, fallback: T) => (value ? value : fallback);
+const withListFallback = <T,>(value: T[], fallback: T[]) =>
+  value.length > 0 ? value : fallback;
 
 const pickPosterColor = (tmdbId: number) =>
   POSTER_PALETTE[Math.abs(tmdbId) % POSTER_PALETTE.length];
@@ -254,24 +262,49 @@ const toBackdropUrl = (item: TmdbItem) => {
   return toImageUrl(path, "w1280");
 };
 
+const normalizeImagePath = (path?: string) => {
+  if (!path) return null;
+  return path.startsWith("/") ? path : `/${path}`;
+};
+
+const isPreferredImageLanguage = (asset: TmdbImageAsset) =>
+  asset.iso_639_1 === "en" || asset.iso_639_1 === null || asset.iso_639_1 === undefined;
+
+const getImageQualityScore = (asset: TmdbImageAsset) => {
+  const resolutionScore = Math.min(((asset.width ?? 0) * (asset.height ?? 0)) / 300000, 8);
+  const voteScore = (asset.vote_average ?? 0) * 2 + Math.min(asset.vote_count ?? 0, 20) * 0.25;
+  return voteScore + resolutionScore;
+};
+
+const rankImageAssets = (assets: TmdbImageAsset[]) =>
+  assets
+    .filter((asset) => asset.file_path && isPreferredImageLanguage(asset))
+    .sort((a, b) => getImageQualityScore(b) - getImageQualityScore(a));
+
 const toGalleryUrls = (item: TmdbItem) => {
   const urls: string[] = [];
-  const pushUnique = (value: string | null) => {
-    if (!value) return;
-    if (!urls.includes(value)) urls.push(value);
+  const seenPaths = new Set<string>();
+  const pushUnique = (path: string | undefined, size: string) => {
+    const normalizedPath = normalizeImagePath(path);
+    if (!normalizedPath || seenPaths.has(normalizedPath)) return;
+    seenPaths.add(normalizedPath);
+    const url = toImageUrl(normalizedPath, size);
+    if (url) urls.push(url);
   };
 
-  pushUnique(toImageUrl(item.poster_path, "w780"));
-  pushUnique(toImageUrl(item.backdrop_path, "w1280"));
+  pushUnique(item.backdrop_path, "w1280");
+  pushUnique(item.poster_path, "w780");
 
-  (item.images?.posters ?? [])
+  rankImageAssets(item.images?.posters ?? [])
+    .filter((asset) => normalizeImagePath(asset.file_path) !== normalizeImagePath(item.poster_path))
+    .slice(0, 1)
+    .forEach((asset) => pushUnique(asset.file_path, "w780"));
+  rankImageAssets(item.images?.backdrops ?? [])
+    .filter((asset) => normalizeImagePath(asset.file_path) !== normalizeImagePath(item.backdrop_path))
     .slice(0, 4)
-    .forEach((asset) => pushUnique(toImageUrl(asset.file_path, "w780")));
-  (item.images?.backdrops ?? [])
-    .slice(0, 6)
-    .forEach((asset) => pushUnique(toImageUrl(asset.file_path, "w1280")));
+    .forEach((asset) => pushUnique(asset.file_path, "w1280"));
 
-  return urls.slice(0, 8);
+  return urls.slice(0, 6);
 };
 
 const toFilm = (item: TmdbItem, fallbackType: MediaType): Film => {
@@ -305,6 +338,13 @@ const dedupeByTmdb = (films: Film[]) => {
     byKey.set(`${film.mediaType}:${film.tmdbId}`, film);
   });
   return [...byKey.values()];
+};
+
+const excludeTmdbMatches = (films: Film[], excludedFilms: Film[]) => {
+  const excludedKeys = new Set(
+    excludedFilms.map((film) => `${film.mediaType}:${film.tmdbId}`),
+  );
+  return films.filter((film) => !excludedKeys.has(`${film.mediaType}:${film.tmdbId}`));
 };
 
 const getFunctionErrorDetails = async (error: unknown) => {
@@ -466,16 +506,20 @@ export const fetchHomeSections = async (
   const preferredGenres = options.preferredGenres ?? [];
 
   try {
-    const [trendingAllRaw, trendingMovieRaw, trendingTvRaw, hiddenRaw] =
+    const [trendingAllRaw, trendingMovieRaw, trendingTvRaw, topMovieRaw, topTvRaw] =
       await Promise.all([
-        invokeTmdb<TmdbListResponse>("trending/all/week", { page: 1 }),
+        invokeTmdb<TmdbListResponse>("trending/all/day", { page: 1 }),
         invokeTmdb<TmdbListResponse>("trending/movie/week", { page: 1 }),
         invokeTmdb<TmdbListResponse>("trending/tv/week", { page: 1 }),
         invokeTmdb<TmdbListResponse>("discover/movie", {
           page: 1,
           sort_by: "vote_average.desc",
-          "vote_count.gte": 200,
-          "vote_count.lte": 8000,
+          "vote_count.gte": 500,
+        }),
+        invokeTmdb<TmdbListResponse>("discover/tv", {
+          page: 1,
+          sort_by: "vote_average.desc",
+          "vote_count.gte": 250,
         }),
       ]);
 
@@ -490,32 +534,51 @@ export const fetchHomeSections = async (
       "movie",
     );
     const trendingTvFilms = mapListToFilms(trendingTvRaw.results ?? [], "tv");
-    const hiddenFilms = mapListToFilms(hiddenRaw.results ?? [], "movie");
+    const topRatedFilms = dedupeByTmdb([
+      ...mapListToFilms(topMovieRaw.results ?? [], "movie"),
+      ...mapListToFilms(topTvRaw.results ?? [], "tv"),
+    ]);
 
-    const rankedHidden = rankByPreferredGenres(hiddenFilms, preferredGenres);
-    const rankedTrendingMovies = rankByPreferredGenres(trendingMovieFilms, preferredGenres);
-    const rankedRails = rankByPreferredGenres(
-      dedupeByTmdb([...trendingAllFilms, ...trendingTvFilms]),
-      preferredGenres,
-    );
+    const rankedTopRated = rankByPreferredGenres(topRatedFilms, preferredGenres);
+    const trendingPool = dedupeByTmdb([
+      ...trendingAllFilms,
+      ...trendingMovieFilms,
+      ...trendingTvFilms,
+    ]);
+    const rankedTrending = rankByPreferredGenres(trendingPool, preferredGenres);
     const featured =
-      rankedRails[0] ??
-      rankedTrendingMovies[0] ??
+      trendingAllFilms.find((film) => film.backdropUrl || film.posterUrl) ??
+      trendingPool.find((film) => film.backdropUrl || film.posterUrl) ??
       trendingAllFilms[0] ??
-      trendingMovieFilms[0] ??
+      trendingPool[0] ??
       featuredFilm;
+    const trendingRail = excludeTmdbMatches(trendingPool, [featured]).slice(0, 8);
+    const topRatedRail = excludeTmdbMatches(rankedTopRated, [
+      featured,
+      ...trendingRail,
+    ]).slice(0, 8);
 
     return {
       featuredFilm: featured,
-      hiddenGems: withFallback(rankedHidden.slice(0, 6), hiddenGems),
-      trending: withFallback(rankedTrendingMovies.slice(0, 8), trending),
-      discoverQueue: withFallback(rankedRails.slice(0, 12), rankedRails.slice(0, 6)),
+      topRated: withListFallback(topRatedRail, hiddenGems),
+      trending: withListFallback(trendingRail, trending),
+      discoverQueue: withListFallback(
+        excludeTmdbMatches(rankedTrending, [featured]).slice(0, 12),
+        rankedTrending.slice(0, 6),
+      ),
     };
   } catch {
+    const fallbackFeatured =
+      trending.find((film) => film.backdropUrl || film.posterUrl) ?? trending[0] ?? featuredFilm;
+    const fallbackTrending = excludeTmdbMatches(trending, [fallbackFeatured]);
+    const fallbackTopRated = excludeTmdbMatches(
+      rankByPreferredGenres(hiddenGems, preferredGenres),
+      [fallbackFeatured, ...fallbackTrending],
+    );
     return {
-      featuredFilm: rankByPreferredGenres([featuredFilm], preferredGenres)[0] ?? featuredFilm,
-      hiddenGems: rankByPreferredGenres(hiddenGems, preferredGenres),
-      trending: rankByPreferredGenres(trending, preferredGenres),
+      featuredFilm: fallbackFeatured,
+      topRated: withListFallback(fallbackTopRated, hiddenGems),
+      trending: fallbackTrending,
       discoverQueue: rankByPreferredGenres(
         [...trending, ...hiddenGems].slice(0, 8),
         preferredGenres,
@@ -583,23 +646,70 @@ export const fetchDiscoverQueue = async (): Promise<Film[]> => {
 
 export const fetchHiddenIcebergCandidates = async (): Promise<Film[]> => {
   try {
-    const [movieRaw, tvRaw] = await Promise.all([
+    const [
+      hiddenMovieRaw,
+      olderMovieRaw,
+      nonEnglishMovieRaw,
+      tvRaw,
+      documentaryRaw,
+      trendingRaw,
+    ] = await Promise.all([
       invokeTmdb<TmdbListResponse>("discover/movie", {
-        page: 2,
+        page: 1,
         sort_by: "vote_average.desc",
-        "vote_count.gte": 300,
+        "vote_count.gte": 80,
+        "vote_count.lte": 3500,
         with_original_language: "en",
       }),
-      invokeTmdb<TmdbListResponse>("discover/tv", {
-        page: 2,
+      invokeTmdb<TmdbListResponse>("discover/movie", {
+        page: 1,
         sort_by: "vote_average.desc",
-        "vote_count.gte": 200,
+        "vote_count.gte": 80,
+        "vote_count.lte": 2500,
+        "primary_release_date.lte": "2015-12-31",
+      }),
+      invokeTmdb<TmdbListResponse>("discover/movie", {
+        page: 1,
+        sort_by: "vote_average.desc",
+        "vote_count.gte": 60,
+        "vote_count.lte": 2200,
+        with_original_language: "ja",
+      }),
+      invokeTmdb<TmdbListResponse>("discover/tv", {
+        page: 1,
+        sort_by: "vote_average.desc",
+        "vote_count.gte": 60,
+        "vote_count.lte": 2500,
+      }),
+      invokeTmdb<TmdbListResponse>("discover/movie", {
+        page: 1,
+        sort_by: "vote_average.desc",
+        "vote_count.gte": 40,
+        "vote_count.lte": 1500,
+        with_genres: "99",
+      }),
+      invokeTmdb<TmdbListResponse>("trending/all/week", {
+        page: 3,
       }),
     ]);
 
-    const movieCandidates = mapListToFilms(movieRaw.results ?? [], "movie");
+    const movieCandidates = mapListToFilms(
+      [
+        ...(hiddenMovieRaw.results ?? []),
+        ...(olderMovieRaw.results ?? []),
+        ...(nonEnglishMovieRaw.results ?? []),
+        ...(documentaryRaw.results ?? []),
+      ],
+      "movie",
+    );
     const tvCandidates = mapListToFilms(tvRaw.results ?? [], "tv");
-    return dedupeByTmdb([...movieCandidates, ...tvCandidates]).slice(0, 24);
+    const trendingCandidates = mapListToFilms(
+      (trendingRaw.results ?? []).filter(
+        (item) => item.media_type === "movie" || item.media_type === "tv",
+      ),
+      "movie",
+    );
+    return dedupeByTmdb([...movieCandidates, ...tvCandidates, ...trendingCandidates]).slice(0, 72);
   } catch {
     return [];
   }
@@ -917,6 +1027,7 @@ export const fetchFilmDetailByRouteId = async (routeId?: string) => {
   try {
     const detail = await invokeTmdb<TmdbItem>(`${mediaType}/${tmdbId}`, {
       append_to_response: "videos,credits,images",
+      include_image_language: "en,null",
     });
     const mapped = toFilm(
       {

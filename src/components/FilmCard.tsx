@@ -46,7 +46,9 @@ export default function FilmCard({
       <View
         style={[
           styles.poster,
-          swipeVariant && styles.posterSwipe,
+          !swipeVariant && styles.posterDefault,
+          swipeVariant && !compact && styles.posterSwipe,
+          swipeVariant && compact && styles.posterSwipeCompact,
           { backgroundColor: film.posterColor },
         ]}
       >
@@ -54,12 +56,12 @@ export default function FilmCard({
           <Image
             source={{ uri: film.posterUrl }}
             style={styles.posterImage}
-            contentFit="cover"
+            contentFit={swipeVariant && compact ? "contain" : "cover"}
             transition={120}
           />
         ) : null}
       </View>
-      <View style={[styles.body, swipeVariant && styles.bodySwipe]}>
+      <View style={[styles.body, swipeVariant && styles.bodySwipe, compact && styles.bodyCompact]}>
         <View style={styles.header}>
           <View style={styles.titleWrap}>
             <Text style={[styles.title, swipeVariant && styles.titleSwipe]} numberOfLines={compact ? 1 : 2}>
@@ -130,16 +132,26 @@ const styles = StyleSheet.create({
   },
   poster: {
     width: "100%",
-    height: 160,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
     overflow: "hidden",
+  },
+  posterDefault: {
+    height: 160,
   },
   posterImage: {
     ...StyleSheet.absoluteFillObject,
   },
   posterSwipe: {
     height: 220,
+  },
+  posterSwipeCompact: {
+    width: "100%",
+    aspectRatio: 2 / 3,
+    alignSelf: "center",
+    marginTop: 0,
+    borderRadius: 0,
+    borderWidth: 0,
   },
   body: {
     padding: SPACING.padding.card,
@@ -148,6 +160,12 @@ const styles = StyleSheet.create({
   },
   bodySwipe: {
     gap: SPACING.md,
+  },
+  bodyCompact: {
+    paddingHorizontal: SPACING.sm,
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.xs,
   },
   header: {
     gap: SPACING.sm,

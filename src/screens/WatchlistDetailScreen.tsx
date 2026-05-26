@@ -53,6 +53,12 @@ type InteractionEventRow = Pick<
   Database["public"]["Tables"]["interaction_events"]["Row"],
   "action" | "tmdb_id" | "media_type" | "source" | "created_at" | "source_watchlist_id"
 >;
+type RecommendationBatchInsert =
+  Database["public"]["Tables"]["recommendation_batches"]["Insert"];
+type RecommendationItemInsert =
+  Database["public"]["Tables"]["recommendation_items"]["Insert"];
+type RecommendationItemUpdate =
+  Database["public"]["Tables"]["recommendation_items"]["Update"];
 type AdaptiveWeights = {
   genreOverlap: number;
   genreSimilarity: number;
@@ -74,6 +80,7 @@ type LearnedSignals = {
   recentlyLikedTmdbIds: Set<number>;
 };
 
+const RECOMMENDATION_ALGORITHM_VERSION = "watchlist-detail-v1";
 const CONTENT_DESCRIPTORS: ContentDescriptor[] = [
   {
     category: "mood",
@@ -183,7 +190,12 @@ export default function WatchlistDetailScreen() {
   const [visibleRecommendationCount, setVisibleRecommendationCount] = useState(
     INITIAL_VISIBLE_RECOMMENDATIONS,
   );
+  const [recommendationItemIdsByKey, setRecommendationItemIdsByKey] = useState<
+    Record<string, string>
+  >({});
   const recommendationSeedRef = useRef<Film[]>([]);
+  const persistedRecommendationKeyRef = useRef<string | null>(null);
+  const persistingRecommendationKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -288,6 +300,105 @@ export default function WatchlistDetailScreen() {
     setVisibleRecommendationCount(INITIAL_VISIBLE_RECOMMENDATIONS);
   }, [watchlist?.id, refreshCount]);
 
+  useEffect(() => {
+    let active = true;
+
+    const persistRecommendations = async () => {
+      if (!supabase || !user?.id || !watchlist?.id || isLoadingRecommendations) return;
+      if (recommendations.length === 0) return;
+
+      const recommendationKey = [
+        user.id,
+        watchlist.id,
+        refreshCount,
+        boostedGenre ?? "",
+        avoidedGenre ?? "",
+        focusFilmId ?? "",
+        recommendations
+          .map((recommendation) => `${recommendation.film.mediaType}:${recommendation.film.tmdbId}`)
+          .join(","),
+      ].join("|");
+
+      if (
+        persistedRecommendationKeyRef.current === recommendationKey ||
+        persistingRecommendationKeyRef.current === recommendationKey
+      ) {
+        return;
+      }
+      persistingRecommendationKeyRef.current = recommendationKey;
+
+      const batchPayload: RecommendationBatchInsert = {
+        user_id: user.id,
+        watchlist_id: watchlist.id,
+        source: "watchlist_detail",
+        algorithm_version: RECOMMENDATION_ALGORITHM_VERSION,
+        seed: refreshCount,
+      };
+
+      const { data: batch, error: batchError } = await supabase
+        .from("recommendation_batches")
+        .insert(batchPayload)
+        .select("id")
+        .single();
+
+      if (!active || batchError || !batch) {
+        if (persistingRecommendationKeyRef.current === recommendationKey) {
+          persistingRecommendationKeyRef.current = null;
+        }
+        return;
+      }
+
+      const itemPayloads: RecommendationItemInsert[] = recommendations.map(
+        (recommendation, index) => ({
+          batch_id: batch.id,
+          user_id: user.id,
+          watchlist_id: watchlist.id,
+          tmdb_id: recommendation.film.tmdbId,
+          media_type: recommendation.film.mediaType,
+          score: Number(recommendation.score.toFixed(2)),
+          reason: recommendation.reason,
+          position: index,
+          status: "pending",
+          metadata: toRecommendationMetadata(recommendation.film),
+        }),
+      );
+
+      const { data: items, error: itemsError } = await supabase
+        .from("recommendation_items")
+        .insert(itemPayloads)
+        .select("id,tmdb_id,media_type");
+
+      if (!active || itemsError || !items) {
+        if (persistingRecommendationKeyRef.current === recommendationKey) {
+          persistingRecommendationKeyRef.current = null;
+        }
+        return;
+      }
+
+      persistedRecommendationKeyRef.current = recommendationKey;
+      persistingRecommendationKeyRef.current = null;
+      setRecommendationItemIdsByKey(
+        Object.fromEntries(
+          items.map((item) => [getRecommendationKey(item.media_type, item.tmdb_id), item.id]),
+        ),
+      );
+    };
+
+    void persistRecommendations();
+    return () => {
+      active = false;
+    };
+  }, [
+    avoidedGenre,
+    boostedGenre,
+    focusFilmId,
+    isLoadingRecommendations,
+    recommendations,
+    refreshCount,
+    user?.id,
+    watchlist?.id,
+  ]);
+
   const openFilm = (
     film: Film,
     source: "watchlist_detail" | "watchlist_recommendation" = "watchlist_detail",
@@ -306,6 +417,20 @@ export default function WatchlistDetailScreen() {
     );
   };
 
+  const updatePersistedRecommendationItem = async (
+    film: Film,
+    values: RecommendationItemUpdate,
+  ) => {
+    const itemId = recommendationItemIdsByKey[getRecommendationKey(film.mediaType, film.tmdbId)];
+    if (!supabase || !user?.id || !itemId) return;
+
+    await supabase
+      .from("recommendation_items")
+      .update(values)
+      .eq("id", itemId)
+      .eq("user_id", user.id);
+  };
+
   const addRecommendationToWatchlist = async (film: Film) => {
     if (!watchlist) return;
 
@@ -320,6 +445,10 @@ export default function WatchlistDetailScreen() {
         source: "watchlist_recommendation",
         watchlist_id: watchlist.id,
         tmdb_id: film.tmdbId,
+      });
+      void updatePersistedRecommendationItem(film, {
+        status: "added",
+        added_to_watchlist_id: watchlist.id,
       });
     }
   };
@@ -364,6 +493,10 @@ export default function WatchlistDetailScreen() {
     setFeedbackByFilmId((prev) => ({ ...prev, [film.id]: feedback }));
     setFocusFilmId(film.id);
     setRefreshCount(0);
+    void updatePersistedRecommendationItem(film, {
+      feedback,
+      status: feedback === "less" ? "dismissed" : "pending",
+    });
 
     if (feedback === "more") {
       setBoostedGenre(film.genres[0] ?? null);
@@ -746,6 +879,23 @@ function dedupeFilmsByTmdb(values: Film[]) {
     byKey.set(`${film.mediaType}:${film.tmdbId}`, film);
   });
   return [...byKey.values()];
+}
+
+function getRecommendationKey(mediaType: string, tmdbId: number) {
+  return `${mediaType}:${tmdbId}`;
+}
+
+function toRecommendationMetadata(film: Film): RecommendationItemInsert["metadata"] {
+  return {
+    film_id: film.id,
+    title: film.title,
+    year: film.year,
+    director: film.director,
+    genres: film.genres,
+    poster_url: film.posterUrl ?? null,
+    backdrop_url: film.backdropUrl ?? null,
+    match_score: film.matchScore,
+  };
 }
 
 function deriveAdaptiveWeights(events: InteractionEventRow[]): AdaptiveWeights {
