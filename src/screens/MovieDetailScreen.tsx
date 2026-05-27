@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -26,6 +27,33 @@ import { CTAButton, screenStyles } from "./shared";
 type DetailTab = "overview" | "analysis" | "videos";
 
 const tabs: DetailTab[] = ["overview", "analysis", "videos"];
+
+const buildQuickFacts = (film: Film) => {
+  const facts = [
+    { label: "Format", value: film.mediaType === "tv" ? "Series" : "Movie" },
+    { label: "Released", value: String(film.year) },
+    {
+      label: "Time",
+      value:
+        film.mediaType === "tv"
+          ? "Series runtime varies"
+          : film.runtimeMinutes
+            ? `${film.runtimeMinutes} min`
+            : "Runtime unavailable",
+    },
+  ];
+
+  if (hasKnownDirector(film)) {
+    facts.push({
+      label: film.mediaType === "tv" ? "Creator" : "Director",
+      value: film.director,
+    });
+  }
+
+  return facts;
+};
+
+const buildOverviewInfo = buildQuickFacts;
 
 export default function MovieDetailScreen() {
   const router = useRouter();
@@ -106,7 +134,7 @@ export default function MovieDetailScreen() {
   return (
     <AppScreen
       title={film?.title ?? "Movie Detail"}
-      subtitle={film ? `${film.year} | ${film.director}` : "Detail view"}
+      subtitle={film ? getDetailSubtitle(film) : "Detail view"}
       headerRight={
         <CTAButton
           label="Back"
@@ -139,19 +167,18 @@ export default function MovieDetailScreen() {
                   transition={160}
                 />
               ) : null}
+              <LinearGradient
+                colors={[
+                  "transparent",
+                  withOpacity(COLORS.background.elevated, 0.42),
+                  COLORS.background.elevated,
+                ]}
+                locations={[0, 0.58, 1]}
+                style={styles.backdropGradient}
+              />
             </View>
             <View style={styles.heroBody}>
               <View style={styles.heroPrimaryRow}>
-                <View style={[styles.posterPanel, { backgroundColor: film.posterColor }]}>
-                  {film.posterUrl ? (
-                    <Image
-                      source={{ uri: film.posterUrl }}
-                      style={styles.posterImage}
-                      contentFit="contain"
-                      transition={160}
-                    />
-                  ) : null}
-                </View>
                 <View style={styles.heroMeta}>
                   <View style={screenStyles.wrapRow}>
                     <MatchScore score={film.matchScore} />
@@ -159,11 +186,19 @@ export default function MovieDetailScreen() {
                       <TasteTag key={genre} label={genre} />
                     ))}
                   </View>
-                  <Text style={screenStyles.mutedText}>
-                    {film.runtimeMinutes} min | {film.year}
-                  </Text>
-                  <Text style={styles.directorText}>By {film.director}</Text>
-                  <CTAButton label="Add to Watchlists" onPress={openWatchlistPicker} />
+                  <Text style={screenStyles.mutedText}>{getMetaLine(film)}</Text>
+                  {hasKnownDirector(film) ? (
+                    <Text style={styles.directorText}>By {film.director}</Text>
+                  ) : null}
+                  <Pressable
+                    onPress={openWatchlistPicker}
+                    style={({ pressed }) => [
+                      styles.addWatchlistButton,
+                      pressed && styles.addWatchlistButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.addWatchlistButtonText}>Add to Watchlists</Text>
+                  </Pressable>
                   {addFeedback ? <Text style={styles.addFeedback}>{addFeedback}</Text> : null}
                 </View>
               </View>
@@ -223,10 +258,78 @@ export default function MovieDetailScreen() {
 
           <View style={screenStyles.card}>
             {tab === "overview" ? (
-              <Text style={screenStyles.bodyText}>{film.synopsis}</Text>
+              <View style={styles.overviewStack}>
+                <View style={styles.synopsisCard}>
+                  <Text style={styles.overviewEyebrow}>Story</Text>
+                  <Text style={screenStyles.bodyText}>{film.synopsis}</Text>
+                </View>
+
+                <View style={styles.quickFactsCard}>
+                  <Text style={styles.overviewSectionTitle}>At a glance</Text>
+                  <View style={styles.quickFactsGrid}>
+                    {buildOverviewInfo(film).map((item) => (
+                      <View key={item.label} style={styles.quickFact}>
+                        <Text style={styles.infoLabel}>{item.label}</Text>
+                        <Text style={styles.infoValue} numberOfLines={2}>
+                          {item.value}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.ratingPanel}>
+                  <View style={styles.ratingMain}>
+                    <Text style={styles.overviewEyebrow}>Audience score</Text>
+                    <Text style={styles.ratingValue}>{getTmdbRatingText(film)}</Text>
+                    {getAudienceVoteText(film) ? (
+                      <Text style={styles.ratingSource}>{getAudienceVoteText(film)}</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.overviewSection}>
+                  <Text style={styles.overviewSectionTitle}>Genres</Text>
+                  <View style={styles.chipWrap}>
+                    {film.genres.map((genre) => (
+                      <View key={genre} style={styles.genreChip}>
+                        <Text style={styles.genreChipText}>{genre}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.overviewSection}>
+                  <Text style={styles.overviewSectionTitle}>Main cast</Text>
+                  {film.cast && film.cast.length > 0 ? (
+                    <View style={styles.castGrid}>
+                      {film.cast.slice(0, 6).map((name, index) => (
+                        <View key={`${name}-${index}`} style={styles.castChip}>
+                          <Text style={styles.castInitial}>{name.charAt(0)}</Text>
+                          <Text style={styles.castName} numberOfLines={2}>
+                            {name}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={screenStyles.mutedText}>
+                      Cast details are not available for this title yet.
+                    </Text>
+                  )}
+                </View>
+              </View>
             ) : null}
             {tab === "analysis" ? (
-              <Text style={screenStyles.bodyText}>{film.analysis}</Text>
+              <View style={styles.analysisGrid}>
+                {buildAnalysisCards(film).map((item) => (
+                  <View key={item.title} style={styles.analysisCard}>
+                    <Text style={styles.analysisLabel}>{item.label}</Text>
+                    <Text style={styles.analysisTitle}>{item.title}</Text>
+                    <Text style={screenStyles.bodyText}>{item.body}</Text>
+                  </View>
+                ))}
+              </View>
             ) : null}
             {tab === "videos" ? (
               <View style={styles.videoList}>
@@ -304,6 +407,85 @@ export default function MovieDetailScreen() {
   );
 }
 
+function hasKnownDirector(film: Film) {
+  return film.director.trim().length > 0 && film.director.trim().toLowerCase() !== "unknown";
+}
+
+function getDetailSubtitle(film: Film) {
+  const parts = [String(film.year), film.mediaType === "tv" ? "Series" : "Movie"];
+  if (hasKnownDirector(film)) parts.push(film.director);
+  return parts.join(" | ");
+}
+
+function getMetaLine(film: Film) {
+  const format =
+    film.mediaType === "tv"
+      ? "Series"
+      : film.runtimeMinutes
+        ? `${film.runtimeMinutes} min`
+        : "Movie";
+  return `${format} | ${film.year}`;
+}
+
+function formatVoteCount(count?: number) {
+  if (!count || count <= 0) return null;
+  if (count >= 1000) return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k votes`;
+  return `${count} votes`;
+}
+
+function getTmdbRatingText(film: Film) {
+  return typeof film.tmdbRating === "number" && film.tmdbRating > 0
+    ? `${film.tmdbRating.toFixed(1)}/10`
+    : `${film.matchScore}%`;
+}
+
+function getAudienceVoteText(film: Film) {
+  const voteCount = formatVoteCount(film.tmdbVoteCount);
+  return voteCount ? `Based on ${voteCount}` : null;
+}
+
+function buildAnalysisCards(film: Film) {
+  const primaryGenres = film.genres.slice(0, 2);
+  const genreText =
+    primaryGenres.length === 0
+      ? "its core genre signals"
+      : primaryGenres.length === 1
+        ? primaryGenres[0]
+        : `${primaryGenres[0]} and ${primaryGenres[1]}`;
+  const ageSignal =
+    film.year < 2010
+      ? "older-catalog"
+      : film.year < 2020
+        ? "established"
+        : "current-catalog";
+  const creatorSignal = hasKnownDirector(film)
+    ? `The creator signal comes through ${film.director}, which is useful when comparing against saved titles from the same filmmaker or showrunner.`
+    : "Creator details are not available, so this recommendation focuses on audience, genre, and format signals.";
+
+  return [
+    {
+      label: "Audience",
+      title: `${film.matchScore}% quality signal`,
+      body: `Audience and ranking signals put this in a strong range. Treat that as confidence, not a guarantee: it says enough viewers responded positively for the title to be worth checking.`,
+    },
+    {
+      label: "Taste Fit",
+      title: `Matches ${genreText}`,
+      body: `The strongest match comes from ${genreText}. Use this when deciding whether the title belongs with your current watchlists or if it is only broadly popular.`,
+    },
+    {
+      label: "Context",
+      title: film.mediaType === "tv" ? "Series commitment" : "Movie-night fit",
+      body:
+        film.mediaType === "tv"
+          ? `This is a ${ageSignal} series pick, so the value is more about world, characters, and continued tone than a single-session runtime. ${creatorSignal}`
+          : film.runtimeMinutes
+            ? `At ${film.runtimeMinutes} minutes, this is a ${ageSignal} movie pick with a clearer one-sitting commitment. ${creatorSignal}`
+            : `This is a ${ageSignal} movie pick. Runtime details are not available, so the recommendation leans on audience, genre, and creator signals. ${creatorSignal}`,
+    },
+  ];
+}
+
 const styles = StyleSheet.create({
   heroCard: {
     backgroundColor: COLORS.background.elevated,
@@ -316,40 +498,30 @@ const styles = StyleSheet.create({
     minHeight: 160,
     maxHeight: 220,
     aspectRatio: 16 / 9,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.default,
-    overflow: "hidden",
+    overflow: "visible",
     backgroundColor: withOpacity(COLORS.background.primary, 0.6),
   },
   backdropImage: {
     width: "100%",
     height: "100%",
   },
+  backdropGradient: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -1,
+    height: 118,
+  },
   heroBody: {
     padding: SPACING.padding.card,
+    paddingTop: 0,
+    marginTop: -SPACING.sm,
     gap: SPACING.sm,
   },
   heroPrimaryRow: {
-    flexDirection: "row",
     gap: SPACING.md,
-    alignItems: "flex-start",
-  },
-  posterPanel: {
-    width: 110,
-    aspectRatio: 2 / 3,
-    borderRadius: BORDER_RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.border.default,
-    overflow: "hidden",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  posterImage: {
-    width: "100%",
-    height: "100%",
   },
   heroMeta: {
-    flex: 1,
     gap: SPACING.sm,
   },
   directorText: {
@@ -361,6 +533,24 @@ const styles = StyleSheet.create({
     color: COLORS.foreground.secondary,
     fontSize: TYPOGRAPHY.fontSize.xs,
     lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  addWatchlistButton: {
+    minHeight: 44,
+    borderRadius: BORDER_RADIUS.button,
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.accent.frost, 0.72),
+    backgroundColor: COLORS.accent.iceBlue,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.xl,
+  },
+  addWatchlistButtonPressed: {
+    opacity: 0.9,
+  },
+  addWatchlistButtonText: {
+    color: COLORS.foreground.inverse,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   galleryBlock: {
     gap: SPACING.xs,
@@ -409,6 +599,160 @@ const styles = StyleSheet.create({
   },
   videoList: {
     gap: SPACING.xs,
+  },
+  overviewStack: {
+    gap: SPACING.md,
+  },
+  synopsisCard: {
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.accent.iceBlue, 0.18),
+    borderRadius: BORDER_RADIUS.button,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.52),
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  overviewEyebrow: {
+    color: COLORS.accent.crystal,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    letterSpacing: TYPOGRAPHY.letterSpacing.wide,
+    textTransform: "uppercase",
+  },
+  quickFactsCard: {
+    gap: SPACING.sm,
+  },
+  overviewSectionTitle: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  quickFactsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  quickFact: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    minHeight: 66,
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    borderRadius: BORDER_RADIUS.button,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.62),
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  infoLabel: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    letterSpacing: TYPOGRAPHY.letterSpacing.wide,
+    textTransform: "uppercase",
+  },
+  infoValue: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  ratingPanel: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.accent.iceBlue, 0.22),
+    borderRadius: BORDER_RADIUS.button,
+    backgroundColor: withOpacity(COLORS.accent.iceBlue, 0.08),
+    padding: SPACING.md,
+  },
+  ratingMain: {
+    gap: SPACING.xs,
+  },
+  ratingValue: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.xl,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+  },
+  ratingSource: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  overviewSection: {
+    gap: SPACING.sm,
+  },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+  },
+  genreChip: {
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    borderRadius: BORDER_RADIUS.pill,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.68),
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  genreChipText: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+  },
+  castGrid: {
+    gap: SPACING.xs,
+  },
+  castChip: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    borderRadius: BORDER_RADIUS.button,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.62),
+    padding: SPACING.sm,
+  },
+  castInitial: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    overflow: "hidden",
+    color: COLORS.foreground.inverse,
+    backgroundColor: COLORS.accent.iceBlue,
+    textAlign: "center",
+    lineHeight: 26,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+  },
+  castName: {
+    flex: 1,
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  analysisGrid: {
+    gap: SPACING.sm,
+  },
+  analysisCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border.default,
+    borderRadius: BORDER_RADIUS.button,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.62),
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  analysisLabel: {
+    color: COLORS.accent.crystal,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    letterSpacing: TYPOGRAPHY.letterSpacing.wide,
+    textTransform: "uppercase",
+  },
+  analysisTitle: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   videoRow: {
     flexDirection: "row",

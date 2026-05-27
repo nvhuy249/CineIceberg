@@ -28,6 +28,25 @@ export function HeroSkeleton() {
   );
 }
 
+export function RailSkeleton() {
+  return (
+    <View style={styles.railSection}>
+      <SkeletonBlock height={18} width="45%" />
+      <SkeletonBlock height={12} width="68%" />
+      <View style={styles.railRow}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <View key={index} style={styles.railCard}>
+            <SkeletonBlock height={188} />
+            <SkeletonBlock height={14} width="78%" />
+            <SkeletonBlock height={12} width="52%" />
+            <SkeletonBlock height={22} width="64%" />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function SearchSkeleton() {
   return (
     <View style={styles.stack}>
@@ -74,5 +93,23 @@ const styles = StyleSheet.create({
   block: {
     borderRadius: BORDER_RADIUS.md,
     backgroundColor: withOpacity(COLORS.foreground.primary, 0.08),
+  },
+  railSection: {
+    gap: SPACING.sm,
+  },
+  railRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    overflow: "hidden",
+  },
+  railCard: {
+    width: 138,
+    height: 312,
+    backgroundColor: COLORS.background.elevated,
+    borderColor: COLORS.border.default,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.card,
+    padding: SPACING.sm,
+    gap: SPACING.sm,
   },
 });

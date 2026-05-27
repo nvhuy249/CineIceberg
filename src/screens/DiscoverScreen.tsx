@@ -21,10 +21,8 @@ import AppScreen from "@/src/components/AppScreen";
 import CurtainTransition from "@/src/components/CurtainTransition";
 import EmptyState from "@/src/components/EmptyState";
 import FilmCard from "@/src/components/FilmCard";
-import TasteTag from "@/src/components/TasteTag";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { useAuth } from "@/src/context/AuthContext";
-import { discoverQueue as fallbackDiscoverQueue } from "@/src/data/mockData";
 import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
 import { supabase } from "@/src/lib/supabase";
@@ -85,14 +83,13 @@ export default function DiscoverScreen() {
         fetchDiscoverQueue(),
         loadSeenDiscoverTmdbIds(),
       ]);
-      const sourceQueue = remoteQueue.length > 0 ? remoteQueue : fallbackDiscoverQueue;
-      setQueue(sourceQueue.filter((film) => !seenTmdbIds.has(film.tmdbId)));
+      setQueue(remoteQueue.filter((film) => !seenTmdbIds.has(film.tmdbId)));
       setIndex(0);
       setLiked(0);
       setPassed(0);
       setHistory([]);
     } catch {
-      setQueue(fallbackDiscoverQueue);
+      setQueue([]);
     } finally {
       setIsQueueLoading(false);
     }
@@ -299,11 +296,6 @@ export default function DiscoverScreen() {
                   {...panResponder.panHandlers}
                 >
                   <FilmCard film={currentFilm} variant="swipe" compact />
-                  <View style={styles.overlayRow}>
-                    {currentFilm.genres.slice(0, 2).map((genre) => (
-                      <TasteTag key={genre} label={genre} />
-                    ))}
-                  </View>
                 </Animated.View>
               </View>
               <Animated.View style={[styles.swipeHint, styles.likeHint, { opacity: likeOpacity }]}>
@@ -422,12 +414,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSize.xs,
     fontWeight: TYPOGRAPHY.fontWeight.semibold,
     letterSpacing: TYPOGRAPHY.letterSpacing.wide,
-  },
-  overlayRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.xs,
   },
   actionsRow: {
     flexDirection: "row",

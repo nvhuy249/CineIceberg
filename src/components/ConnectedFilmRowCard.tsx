@@ -11,48 +11,64 @@ import {
 } from "@/src/constants/designTokens";
 import type { Film } from "@/src/types/film";
 
-import MatchScore from "./MatchScore";
+import CompactMatchBadge from "./CompactMatchBadge";
 
 type ConnectedFilmRowCardProps = {
   film: Film;
   onOpenFilm?: () => void;
   rightContent: ReactNode;
+  posterOnly?: boolean;
+  compactPosterRow?: boolean;
 };
 
 export default function ConnectedFilmRowCard({
   film,
   onOpenFilm,
   rightContent,
+  posterOnly = false,
+  compactPosterRow = false,
 }: ConnectedFilmRowCardProps) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, compactPosterRow && styles.cardCompactPoster]}>
       <Pressable
         onPress={onOpenFilm}
-        style={({ pressed }) => [styles.leftPane, pressed && styles.leftPanePressed]}
+        style={({ pressed }) => [
+          styles.leftPane,
+          posterOnly && styles.leftPanePosterOnly,
+          pressed && styles.leftPanePressed,
+        ]}
       >
-        <View style={[styles.poster, { backgroundColor: film.posterColor }]}>
+        <View
+          style={[
+            styles.poster,
+            posterOnly && styles.posterOnly,
+            { backgroundColor: film.posterColor },
+          ]}
+        >
           {film.posterUrl ? (
             <Image
               source={{ uri: film.posterUrl }}
               style={styles.posterImage}
-              contentFit="cover"
+              contentFit={posterOnly ? "contain" : "cover"}
               transition={120}
             />
           ) : null}
-          <View style={styles.matchWrap}>
-            <MatchScore score={film.matchScore} />
+        </View>
+        {!posterOnly ? (
+          <View style={styles.leftMeta}>
+            <Text style={styles.title} numberOfLines={2}>
+              {film.title}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {film.year} | {film.genres[0]}
+            </Text>
+            <CompactMatchBadge score={film.matchScore} />
           </View>
-        </View>
-        <View style={styles.leftMeta}>
-          <Text style={styles.title} numberOfLines={2}>
-            {film.title}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {film.year} | {film.genres[0]}
-          </Text>
-        </View>
+        ) : null}
       </Pressable>
-      <View style={styles.rightPane}>{rightContent}</View>
+      <View style={[styles.rightPane, compactPosterRow && styles.rightPaneCompactPoster]}>
+        {rightContent}
+      </View>
     </View>
   );
 }
@@ -66,6 +82,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: COLORS.background.elevated,
   },
+  cardCompactPoster: {
+    height: 178,
+  },
   leftPane: {
     width: 136,
     borderRightWidth: 1,
@@ -75,25 +94,28 @@ const styles = StyleSheet.create({
   leftPanePressed: {
     opacity: 0.9,
   },
+  leftPanePosterOnly: {
+    width: 118,
+    justifyContent: "center",
+  },
   poster: {
     height: 140,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border.default,
-    padding: SPACING.sm,
-    alignItems: "flex-end",
     overflow: "hidden",
+  },
+  posterOnly: {
+    height: 178,
+    borderBottomWidth: 0,
   },
   posterImage: {
     ...StyleSheet.absoluteFillObject,
-  },
-  matchWrap: {
-    alignSelf: "flex-end",
   },
   leftMeta: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     gap: SPACING.xs,
-    minHeight: 70,
+    minHeight: 94,
   },
   title: {
     color: COLORS.foreground.primary,
@@ -112,5 +134,10 @@ const styles = StyleSheet.create({
     padding: SPACING.padding.card,
     gap: SPACING.sm,
     justifyContent: "space-between",
+  },
+  rightPaneCompactPoster: {
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+    overflow: "hidden",
   },
 });

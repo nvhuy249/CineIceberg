@@ -12,10 +12,14 @@ export type Film = {
   imageGalleryUrls?: string[];
   title: string;
   year: number;
-  runtimeMinutes: number;
+  runtimeMinutes?: number | null;
   director: string;
+  cast?: string[];
   genres: string[];
   matchScore: number;
+  tmdbRating?: number;
+  tmdbVoteCount?: number;
+  imdbId?: string | null;
   posterColor: string;
   synopsis: string;
   analysis: string;

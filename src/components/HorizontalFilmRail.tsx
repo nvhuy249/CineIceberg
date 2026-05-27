@@ -3,13 +3,14 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/src/constants/designTokens";
 import type { Film } from "@/src/types/film";
 
-import HomeRailCard from "./HomeRailCard";
+import HomeRailCard, { type HomeRailCardVariant } from "./HomeRailCard";
 
 type HorizontalFilmRailProps = {
   title: string;
   subtitle?: string;
   films: Film[];
   onFilmPress?: (film: Film) => void;
+  cardVariant?: HomeRailCardVariant;
 };
 
 export default function HorizontalFilmRail({
@@ -17,6 +18,7 @@ export default function HorizontalFilmRail({
   subtitle,
   films,
   onFilmPress,
+  cardVariant = "portrait",
 }: HorizontalFilmRailProps) {
   return (
     <View style={styles.section}>
@@ -33,8 +35,14 @@ export default function HorizontalFilmRail({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.railContent}
       >
-        {films.map((film) => (
-          <HomeRailCard key={film.id} film={film} onPress={() => onFilmPress?.(film)} />
+        {films.map((film, index) => (
+          <HomeRailCard
+            key={film.id}
+            film={film}
+            variant={cardVariant}
+            rank={index + 1}
+            onPress={() => onFilmPress?.(film)}
+          />
         ))}
       </ScrollView>
     </View>

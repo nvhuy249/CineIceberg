@@ -1,4 +1,5 @@
 import { useRouter, type Href } from "expo-router";
+import { Image } from "expo-image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -32,7 +33,7 @@ import ConnectedFilmRowCard from "@/src/components/ConnectedFilmRowCard";
 import EmptyState from "@/src/components/EmptyState";
 import TasteTag from "@/src/components/TasteTag";
 import { useAuth } from "@/src/context/AuthContext";
-import { films, getFilmsByTmdbIds } from "@/src/data/mockData";
+import { getFilmsByTmdbIds } from "@/src/data/mockData";
 import { useWatchlists } from "@/src/context/WatchlistsContext";
 import { trackEvent } from "@/src/lib/analytics";
 import { logInteractionEvent } from "@/src/lib/interactionEvents";
@@ -65,12 +66,17 @@ type RecommendationItemUpdate =
 
 const MAX_SUGGESTIONS = 12;
 const ICEBERG_ALGORITHM_VERSION = "hidden-iceberg-v2";
+const ICEBERG_BACKGROUND = require("../../assets/images/hidden-iceberg-background.png");
+const DEPTH_DARKEN_START = 520;
+const DEPTH_DARKEN_MID = 820;
+const DEPTH_DARKEN_END = 1320;
+const DEPTH_ABYSS_END = 1780;
 
 export default function HiddenIcebergScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { watchlists, addFilmToWatchlist } = useWatchlists();
-  const [candidateFilms, setCandidateFilms] = useState<Film[]>(films);
+  const [candidateFilms, setCandidateFilms] = useState<Film[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(true);
   const [interactionEvents, setInteractionEvents] = useState<InteractionEventRow[]>([]);
   const [feedbackByFilmId, setFeedbackByFilmId] = useState<Record<string, IcebergFeedback>>({});
@@ -164,10 +170,10 @@ export default function HiddenIcebergScreen() {
       try {
         const remoteCandidates = await fetchHiddenIcebergCandidates();
         if (!active) return;
-        setCandidateFilms(remoteCandidates.length > 0 ? remoteCandidates : films);
+        setCandidateFilms(remoteCandidates);
       } catch {
         if (!active) return;
-        setCandidateFilms(films);
+        setCandidateFilms([]);
       } finally {
         if (!active) return;
         setIsLoadingCandidates(false);
@@ -366,8 +372,8 @@ export default function HiddenIcebergScreen() {
   const depthOverlayStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       depthScroll.value,
-      [0, 320, 900],
-      [0.08, 0.42, 0.78],
+      [0, DEPTH_DARKEN_START, DEPTH_DARKEN_MID, DEPTH_DARKEN_END, DEPTH_ABYSS_END],
+      [0, 0, 0.48, 0.91, 0.97],
       Extrapolation.CLAMP,
     ),
   }));
@@ -426,7 +432,7 @@ export default function HiddenIcebergScreen() {
           />
         ) : null}
 
-        {suggestions.map((item, index) => {
+        {!isLoadingCandidates && suggestions.map((item, index) => {
           const alreadySaved = savedIds.includes(item.film.tmdbId);
           const isSaving = savingTmdbIds.includes(item.film.tmdbId);
           return (
@@ -677,69 +683,44 @@ function IcebergDepthBackground({
   ambientMotion: SharedValue<number>;
   reduceMotion: boolean;
 }) {
-  const skyStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 260], [1, 0], Extrapolation.CLAMP),
+  const imageMotionStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateY: interpolate(depthScroll.value, [0, 420], [0, -52], Extrapolation.CLAMP),
+        translateY: interpolate(depthScroll.value, [0, 960], [0, -132], Extrapolation.CLAMP),
+      },
+      {
+        scale: interpolate(depthScroll.value, [0, 960], [1.02, 1.12], Extrapolation.CLAMP),
       },
     ],
   }));
   const surfaceStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 160, 420], [1, 0.52, 0], Extrapolation.CLAMP),
+    opacity: interpolate(depthScroll.value, [0, 180, 480], [0.9, 0.55, 0], Extrapolation.CLAMP),
     transform: [
       {
         translateX: reduceMotion
           ? 0
-          : interpolate(ambientMotion.value, [0, 1], [-16, 16], Extrapolation.CLAMP),
+          : interpolate(ambientMotion.value, [0, 1], [-18, 18], Extrapolation.CLAMP),
       },
       {
-        translateY: interpolate(depthScroll.value, [0, 480], [0, -46], Extrapolation.CLAMP),
-      },
-    ],
-  }));
-  const icebergStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 780], [1, 0.52], Extrapolation.CLAMP),
-    transform: [
-      {
-        translateY:
-          interpolate(depthScroll.value, [0, 620], [0, -160], Extrapolation.CLAMP) +
-          (reduceMotion
-            ? 0
-            : interpolate(ambientMotion.value, [0, 1], [-4, 4], Extrapolation.CLAMP)),
-      },
-      {
-        scale: interpolate(depthScroll.value, [0, 620], [1, 1.18], Extrapolation.CLAMP),
-      },
-    ],
-  }));
-  const icebergCoreStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 760], [0.9, 0.38], Extrapolation.CLAMP),
-    transform: [
-      {
-        translateY: interpolate(depthScroll.value, [0, 620], [0, -148], Extrapolation.CLAMP),
-      },
-      {
-        scale: interpolate(depthScroll.value, [0, 620], [1, 1.16], Extrapolation.CLAMP),
-      },
-    ],
-  }));
-  const icebergFacetStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 760], [0.7, 0.28], Extrapolation.CLAMP),
-    transform: [
-      {
-        translateY: interpolate(depthScroll.value, [0, 620], [0, -138], Extrapolation.CLAMP),
-      },
-      {
-        scale: interpolate(depthScroll.value, [0, 620], [1, 1.1], Extrapolation.CLAMP),
+        translateY: interpolate(depthScroll.value, [0, 520], [0, -42], Extrapolation.CLAMP),
       },
     ],
   }));
   const trenchStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 320, 900], [0, 0.36, 0.82], Extrapolation.CLAMP),
+    opacity: interpolate(
+      depthScroll.value,
+      [0, DEPTH_DARKEN_START, DEPTH_DARKEN_MID, DEPTH_DARKEN_END, DEPTH_ABYSS_END],
+      [0, 0, 0.42, 0.9, 1],
+      Extrapolation.CLAMP,
+    ),
     transform: [
       {
-        translateY: interpolate(depthScroll.value, [0, 900], [90, -80], Extrapolation.CLAMP),
+        translateY: interpolate(
+          depthScroll.value,
+          [0, DEPTH_DARKEN_START, DEPTH_DARKEN_END],
+          [90, 90, -80],
+          Extrapolation.CLAMP,
+        ),
       },
       {
         scaleX: reduceMotion
@@ -749,7 +730,7 @@ function IcebergDepthBackground({
     ],
   }));
   const causticStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 260, 700], [0.34, 0.22, 0.06], Extrapolation.CLAMP),
+    opacity: interpolate(depthScroll.value, [0, 260, 700], [0.22, 0.18, 0.05], Extrapolation.CLAMP),
     transform: [
       {
         translateX: reduceMotion
@@ -774,7 +755,7 @@ function IcebergDepthBackground({
     ],
   }));
   const lightRayStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(depthScroll.value, [0, 260, 720], [0.26, 0.18, 0.04], Extrapolation.CLAMP),
+    opacity: interpolate(depthScroll.value, [0, 260, 720], [0.18, 0.13, 0.03], Extrapolation.CLAMP),
     transform: [
       {
         translateX: reduceMotion
@@ -790,7 +771,15 @@ function IcebergDepthBackground({
   return (
     <View style={styles.backgroundLayer}>
       <View style={styles.oceanBase} />
-      <Animated.View style={[styles.skyLayer, skyStyle]} />
+      <Animated.View style={[styles.backgroundImageWrap, imageMotionStyle]}>
+        <Image
+          source={ICEBERG_BACKGROUND}
+          style={styles.backgroundImage}
+          contentFit="cover"
+          transition={180}
+        />
+      </Animated.View>
+      <View style={styles.readabilityScrim} />
       <Animated.View style={[styles.surfaceGlow, surfaceStyle]} />
       <Animated.View style={[styles.lightRayLayer, lightRayStyle]}>
         <View style={[styles.lightRay, styles.lightRayLeft]} />
@@ -811,33 +800,6 @@ function IcebergDepthBackground({
             ]}
           />
         ))}
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.backgroundIceberg,
-          icebergStyle,
-        ]}
-      >
-        <View style={styles.icebergPeakTall} />
-        <View style={styles.icebergPeakLeft} />
-        <View style={styles.icebergPeakRight} />
-        <View style={styles.icebergBase} />
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.backgroundIcebergCore,
-          icebergCoreStyle,
-        ]}
-      >
-        <View style={styles.submergedMain} />
-        <View style={styles.submergedLeft} />
-        <View style={styles.submergedRight} />
-        <View style={styles.submergedTail} />
-      </Animated.View>
-      <Animated.View style={[styles.icebergFacetLayer, icebergFacetStyle]}>
-        <View style={styles.icebergFacetShardA} />
-        <View style={styles.icebergFacetShardB} />
-        <View style={styles.icebergFacetShardC} />
       </Animated.View>
       <Animated.View
         style={[
@@ -910,28 +872,33 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#020815",
   },
-  skyLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "31%",
-    backgroundColor: "#172a3d",
+  backgroundImageWrap: {
+    ...StyleSheet.absoluteFillObject,
+    top: -18,
+    bottom: -150,
+  },
+  backgroundImage: {
+    width: "100%",
+    height: "100%",
+  },
+  readabilityScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: withOpacity("#020815", 0.22),
   },
   surfaceGlow: {
     position: "absolute",
-    top: "23%",
+    top: "31%",
     left: "-10%",
     right: "-10%",
-    height: 72,
+    height: 50,
     borderRadius: 100,
-    backgroundColor: withOpacity(COLORS.accent.crystal, 0.18),
+    backgroundColor: withOpacity(COLORS.accent.crystal, 0.1),
     borderTopWidth: 1,
-    borderTopColor: withOpacity(COLORS.accent.crystal, 0.56),
+    borderTopColor: withOpacity(COLORS.accent.crystal, 0.38),
   },
   lightRayLayer: {
     position: "absolute",
-    top: "24%",
+    top: "34%",
     left: 0,
     right: 0,
     height: "58%",
@@ -962,7 +929,7 @@ const styles = StyleSheet.create({
   },
   caustics: {
     position: "absolute",
-    top: "25%",
+    top: "34%",
     left: "-20%",
     right: "-20%",
     height: 180,
@@ -975,151 +942,6 @@ const styles = StyleSheet.create({
     backgroundColor: withOpacity(COLORS.accent.crystal, 0.24),
     transform: [{ rotate: "-12deg" }],
   },
-  backgroundIceberg: {
-    position: "absolute",
-    top: 30,
-    left: 0,
-    right: 0,
-    height: 210,
-  },
-  backgroundIcebergCore: {
-    position: "absolute",
-    top: 190,
-    left: 0,
-    right: 0,
-    height: 330,
-  },
-  icebergPeakTall: {
-    position: "absolute",
-    left: "44%",
-    top: 0,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 62,
-    borderRightWidth: 40,
-    borderBottomWidth: 138,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    borderBottomColor: withOpacity(COLORS.accent.crystal, 0.74),
-    transform: [{ translateX: -44 }],
-  },
-  icebergPeakLeft: {
-    position: "absolute",
-    left: "17%",
-    top: 82,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 78,
-    borderRightWidth: 46,
-    borderBottomWidth: 82,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    borderBottomColor: withOpacity(COLORS.accent.iceBlue, 0.52),
-    transform: [{ rotate: "-5deg" }],
-  },
-  icebergPeakRight: {
-    position: "absolute",
-    right: "9%",
-    top: 76,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 48,
-    borderRightWidth: 90,
-    borderBottomWidth: 96,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
-    borderBottomColor: withOpacity(COLORS.accent.frost, 0.45),
-    transform: [{ rotate: "6deg" }],
-  },
-  icebergBase: {
-    position: "absolute",
-    left: "4%",
-    right: "4%",
-    top: 158,
-    height: 64,
-    backgroundColor: withOpacity(COLORS.accent.iceBlue, 0.32),
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 58,
-    transform: [{ skewX: "-12deg" }],
-    borderTopWidth: 1,
-    borderTopColor: withOpacity(COLORS.accent.crystal, 0.34),
-  },
-  submergedMain: {
-    position: "absolute",
-    left: "18%",
-    top: 0,
-    width: 230,
-    height: 270,
-    backgroundColor: withOpacity(COLORS.accent.iceBlue, 0.19),
-    transform: [{ skewX: "-18deg" }],
-    borderBottomLeftRadius: 70,
-    borderBottomRightRadius: 24,
-  },
-  submergedLeft: {
-    position: "absolute",
-    left: "0%",
-    top: 42,
-    width: 158,
-    height: 178,
-    backgroundColor: withOpacity(COLORS.accent.crystal, 0.11),
-    transform: [{ skewX: "24deg" }],
-    borderBottomLeftRadius: 88,
-  },
-  submergedRight: {
-    position: "absolute",
-    right: "-4%",
-    top: 22,
-    width: 168,
-    height: 228,
-    backgroundColor: withOpacity(COLORS.accent.frost, 0.12),
-    transform: [{ skewX: "-24deg" }],
-    borderBottomRightRadius: 92,
-  },
-  submergedTail: {
-    position: "absolute",
-    left: "37%",
-    top: 196,
-    width: 118,
-    height: 150,
-    backgroundColor: withOpacity(COLORS.accent.iceBlue, 0.1),
-    transform: [{ skewX: "18deg" }],
-    borderBottomLeftRadius: 70,
-    borderBottomRightRadius: 52,
-  },
-  icebergFacetLayer: {
-    position: "absolute",
-    top: 82,
-    left: 0,
-    right: 0,
-    height: 360,
-  },
-  icebergFacetShardA: {
-    position: "absolute",
-    left: "43%",
-    top: 26,
-    width: 2,
-    height: 158,
-    backgroundColor: withOpacity(COLORS.accent.crystal, 0.2),
-    transform: [{ rotate: "-29deg" }],
-  },
-  icebergFacetShardB: {
-    position: "absolute",
-    left: "31%",
-    top: 170,
-    width: 170,
-    height: 2,
-    backgroundColor: withOpacity(COLORS.accent.crystal, 0.16),
-    transform: [{ rotate: "-10deg" }],
-  },
-  icebergFacetShardC: {
-    position: "absolute",
-    right: "20%",
-    top: 116,
-    width: 2,
-    height: 188,
-    backgroundColor: withOpacity(COLORS.accent.crystal, 0.13),
-    transform: [{ rotate: "28deg" }],
-  },
   trenchLayer: {
     position: "absolute",
     left: "-15%",
@@ -1128,7 +950,7 @@ const styles = StyleSheet.create({
     height: "55%",
     borderTopLeftRadius: 240,
     borderTopRightRadius: 240,
-    backgroundColor: "#00030b",
+    backgroundColor: "#000000",
   },
   bubbleLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -1190,7 +1012,7 @@ const styles = StyleSheet.create({
   depthOverlay: {
     ...StyleSheet.absoluteFillObject,
     top: 0,
-    backgroundColor: "#010611",
+    backgroundColor: "#000105",
     pointerEvents: "none",
   },
   depthSection: {

@@ -22,40 +22,27 @@ import {
 } from "@/src/constants/designTokens";
 import AppScreen from "@/src/components/AppScreen";
 import HorizontalFilmRail from "@/src/components/HorizontalFilmRail";
-import { HeroSkeleton } from "@/src/components/LoadingSkeletons";
+import { HeroSkeleton, RailSkeleton } from "@/src/components/LoadingSkeletons";
 import MatchScore from "@/src/components/MatchScore";
 import TheaterCurtain from "@/src/components/TheaterCurtain";
 import TasteTag from "@/src/components/TasteTag";
 import { useAuth } from "@/src/context/AuthContext";
-import {
-  discoverQueue as fallbackDiscoverQueue,
-  featuredFilm as fallbackFeaturedFilm,
-  hiddenGems as fallbackTopRated,
-  trending as fallbackTrending,
-} from "@/src/data/mockData";
 import { trackEvent } from "@/src/lib/analytics";
 import { USE_NATIVE_ANIMATED_DRIVER } from "@/src/lib/animation";
 import { logInteractionEvent } from "@/src/lib/interactionEvents";
 import { supabase } from "@/src/lib/supabase";
-import { fetchHomeSections } from "@/src/lib/tmdb";
+import { fetchHomeSections, type HomeSections } from "@/src/lib/tmdb";
 import { blurActiveElementOnWeb } from "@/src/lib/webFocus";
 import type { Film } from "@/src/types/film";
 
 import { CTAButton } from "./shared";
-
-const FALLBACK_HOME_SECTIONS = {
-  featuredFilm: fallbackTrending[0] ?? fallbackFeaturedFilm,
-  topRated: fallbackTopRated,
-  trending: fallbackTrending,
-  discoverQueue: fallbackDiscoverQueue,
-};
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [showReveal, setShowReveal] = useState(false);
-  const [homeSections, setHomeSections] = useState(FALLBACK_HOME_SECTIONS);
+  const [homeSections, setHomeSections] = useState<HomeSections | null>(null);
   const [preferredGenres, setPreferredGenres] = useState<string[]>([]);
   const revealLockedUntilRef = useRef(0);
   const revealInProgressRef = useRef(false);
@@ -97,7 +84,7 @@ export default function HomeScreen() {
         setHomeSections(remoteSections);
       } catch {
         if (!active) return;
-        setHomeSections(FALLBACK_HOME_SECTIONS);
+        setHomeSections(null);
       } finally {
         if (!active) return;
         setLoading(false);
@@ -186,66 +173,74 @@ export default function HomeScreen() {
       }}
     >
       {loading ? (
-        <HeroSkeleton />
-      ) : (
-        <Pressable style={styles.featuredCard} onPress={() => openFilm(homeSections.featuredFilm)}>
-          <View style={styles.featuredPoster}>
-            {homeSections.featuredFilm.backdropUrl || homeSections.featuredFilm.posterUrl ? (
-              <Image
-                source={{
-                  uri:
-                    homeSections.featuredFilm.backdropUrl ||
-                    homeSections.featuredFilm.posterUrl ||
-                    "",
-                }}
-                style={StyleSheet.absoluteFillObject}
-                contentFit="cover"
-                transition={160}
+        <>
+          <HeroSkeleton />
+          <RailSkeleton />
+          <RailSkeleton />
+          <RailSkeleton />
+        </>
+      ) : homeSections ? (
+        <>
+          <Pressable style={styles.featuredCard} onPress={() => openFilm(homeSections.featuredFilm)}>
+            <View style={styles.featuredPoster}>
+              {homeSections.featuredFilm.backdropUrl || homeSections.featuredFilm.posterUrl ? (
+                <Image
+                  source={{
+                    uri:
+                      homeSections.featuredFilm.backdropUrl ||
+                      homeSections.featuredFilm.posterUrl ||
+                      "",
+                  }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="cover"
+                  transition={160}
+                />
+              ) : null}
+              <View
+                style={[
+                  styles.featuredTint,
+                  { backgroundColor: withOpacity(COLORS.background.primary, 0.18) },
+                ]}
               />
-            ) : null}
-            <View
-              style={[
-                styles.featuredTint,
-                { backgroundColor: withOpacity(COLORS.background.primary, 0.18) },
-              ]}
-            />
-            <View style={styles.featuredPill}>
-              <Text style={styles.featuredPillText}>Now Showing</Text>
+              <View style={styles.featuredPill}>
+                <Text style={styles.featuredPillText}>Now Showing</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.featuredBody}>
-            <View style={styles.featuredMetaRow}>
-              <MatchScore score={homeSections.featuredFilm.matchScore} />
-              <TasteTag label="Featured" variant="accent" />
+            <View style={styles.featuredBody}>
+              <View style={styles.featuredMetaRow}>
+                <MatchScore score={homeSections.featuredFilm.matchScore} />
+                <TasteTag label="Featured" variant="accent" />
+              </View>
+              <Text style={styles.featuredTitle}>{homeSections.featuredFilm.title}</Text>
+              <Text style={styles.featuredSynopsis} numberOfLines={2}>
+                {homeSections.featuredFilm.synopsis}
+              </Text>
             </View>
-            <Text style={styles.featuredTitle}>{homeSections.featuredFilm.title}</Text>
-            <Text style={styles.featuredSynopsis} numberOfLines={2}>
-              {homeSections.featuredFilm.synopsis}
-            </Text>
-          </View>
-        </Pressable>
-      )}
+          </Pressable>
+          <HorizontalFilmRail
+            title="Trending"
+            subtitle="Popular movies and shows right now"
+            films={homeSections.trending}
+            onFilmPress={openFilm}
+          />
 
-      <HorizontalFilmRail
-        title="Trending"
-        subtitle="Popular movies and shows right now"
-        films={homeSections.trending}
-        onFilmPress={openFilm}
-      />
+          <HorizontalFilmRail
+            title="Top Movies/Series"
+            subtitle="High-rated movies and shows from TMDB"
+            films={homeSections.topRated}
+            cardVariant="portrait"
+            onFilmPress={openFilm}
+          />
 
-      <HorizontalFilmRail
-        title="Top Movies/Series"
-        subtitle="High-rated movies and shows from TMDB"
-        films={homeSections.topRated}
-        onFilmPress={openFilm}
-      />
-
-      <HorizontalFilmRail
-        title="Recommended"
-        subtitle="Fast lane suggestions for tonight"
-        films={homeSections.discoverQueue.slice(0, 6)}
-        onFilmPress={openFilm}
-      />
+          <HorizontalFilmRail
+            title="Recommended"
+            subtitle="Fast lane suggestions for tonight"
+            films={homeSections.discoverQueue.slice(0, 6)}
+            cardVariant="recommended"
+            onFilmPress={openFilm}
+          />
+        </>
+      ) : null}
 
       <View style={styles.teaserCard}>
         <Text style={styles.teaserTitle}>Go Deeper</Text>

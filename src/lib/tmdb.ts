@@ -1,10 +1,7 @@
 import {
   cacheFilms,
-  featuredFilm,
   getFilmById,
-  hiddenGems,
   searchFilms,
-  trending,
 } from "@/src/data/mockData";
 import { supabase, SUPABASE_CONFIG_ERROR } from "@/src/lib/supabase";
 import type { Film } from "@/src/types/film";
@@ -28,7 +25,13 @@ type TmdbCrewMember = {
   name?: string;
 };
 
+type TmdbCastMember = {
+  name?: string;
+  order?: number;
+};
+
 type TmdbCreditsPayload = {
+  cast?: TmdbCastMember[];
   crew?: TmdbCrewMember[];
 };
 
@@ -72,6 +75,9 @@ type TmdbItem = {
   credits?: TmdbCreditsPayload;
   videos?: TmdbVideoPayload;
   images?: TmdbImagesPayload;
+  external_ids?: {
+    imdb_id?: string | null;
+  };
   created_by?: { name?: string }[];
 };
 
@@ -79,7 +85,7 @@ type TmdbListResponse = {
   results?: TmdbItem[];
 };
 
-type HomeSections = {
+export type HomeSections = {
   featuredFilm: Film;
   topRated: Film[];
   trending: Film[];
@@ -163,8 +169,6 @@ const MOVIE_GENRE_IDS_BY_NAME = toGenreIdLookup(MOVIE_GENRES);
 const TV_GENRE_IDS_BY_NAME = toGenreIdLookup(TV_GENRES);
 
 const withFallback = <T,>(value: T, fallback: T) => (value ? value : fallback);
-const withListFallback = <T,>(value: T[], fallback: T[]) =>
-  value.length > 0 ? value : fallback;
 
 const pickPosterColor = (tmdbId: number) =>
   POSTER_PALETTE[Math.abs(tmdbId) % POSTER_PALETTE.length];
@@ -212,6 +216,13 @@ const getDirector = (item: TmdbItem) => {
   return "Unknown";
 };
 
+const getCast = (item: TmdbItem) =>
+  (item.credits?.cast ?? [])
+    .filter((member) => member.name)
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map((member) => member.name as string)
+    .slice(0, 6);
+
 const getRuntimeMinutes = (item: TmdbItem, mediaType: MediaType) => {
   if (mediaType === "movie" && typeof item.runtime === "number" && item.runtime > 0) {
     return item.runtime;
@@ -226,7 +237,7 @@ const getRuntimeMinutes = (item: TmdbItem, mediaType: MediaType) => {
     return item.episode_run_time[0];
   }
 
-  return mediaType === "tv" ? 50 : 110;
+  return null;
 };
 
 const getMatchScore = (item: TmdbItem) => {
@@ -323,8 +334,12 @@ const toFilm = (item: TmdbItem, fallbackType: MediaType): Film => {
     year: getYear(item),
     runtimeMinutes: getRuntimeMinutes(item, mediaType),
     director: getDirector(item),
+    cast: getCast(item),
     genres: getGenres(item, mediaType),
     matchScore,
+    tmdbRating: item.vote_average,
+    tmdbVoteCount: item.vote_count,
+    imdbId: item.external_ids?.imdb_id ?? null,
     posterColor: pickPosterColor(item.id),
     synopsis: (item.overview || "No summary available.").trim(),
     analysis: `Audience score ${matchScore}% based on TMDB votes and ranking signals.`,
@@ -550,8 +565,11 @@ export const fetchHomeSections = async (
       trendingAllFilms.find((film) => film.backdropUrl || film.posterUrl) ??
       trendingPool.find((film) => film.backdropUrl || film.posterUrl) ??
       trendingAllFilms[0] ??
-      trendingPool[0] ??
-      featuredFilm;
+      trendingPool[0];
+
+    if (!featured) {
+      throw new Error("No TMDB home sections available.");
+    }
     const trendingRail = excludeTmdbMatches(trendingPool, [featured]).slice(0, 8);
     const topRatedRail = excludeTmdbMatches(rankedTopRated, [
       featured,
@@ -560,30 +578,12 @@ export const fetchHomeSections = async (
 
     return {
       featuredFilm: featured,
-      topRated: withListFallback(topRatedRail, hiddenGems),
-      trending: withListFallback(trendingRail, trending),
-      discoverQueue: withListFallback(
-        excludeTmdbMatches(rankedTrending, [featured]).slice(0, 12),
-        rankedTrending.slice(0, 6),
-      ),
+      topRated: topRatedRail,
+      trending: trendingRail,
+      discoverQueue: excludeTmdbMatches(rankedTrending, [featured]).slice(0, 12),
     };
   } catch {
-    const fallbackFeatured =
-      trending.find((film) => film.backdropUrl || film.posterUrl) ?? trending[0] ?? featuredFilm;
-    const fallbackTrending = excludeTmdbMatches(trending, [fallbackFeatured]);
-    const fallbackTopRated = excludeTmdbMatches(
-      rankByPreferredGenres(hiddenGems, preferredGenres),
-      [fallbackFeatured, ...fallbackTrending],
-    );
-    return {
-      featuredFilm: fallbackFeatured,
-      topRated: withListFallback(fallbackTopRated, hiddenGems),
-      trending: fallbackTrending,
-      discoverQueue: rankByPreferredGenres(
-        [...trending, ...hiddenGems].slice(0, 8),
-        preferredGenres,
-      ),
-    };
+    throw new Error("Unable to load TMDB home sections.");
   }
 };
 
@@ -1026,7 +1026,7 @@ export const fetchFilmDetailByRouteId = async (routeId?: string) => {
 
   try {
     const detail = await invokeTmdb<TmdbItem>(`${mediaType}/${tmdbId}`, {
-      append_to_response: "videos,credits,images",
+      append_to_response: "videos,credits,images,external_ids",
       include_image_language: "en,null",
     });
     const mapped = toFilm(

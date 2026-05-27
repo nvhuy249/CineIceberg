@@ -120,30 +120,58 @@ export default function WatchlistsScreen() {
             message="Create your first watchlist to start collecting recommendations by mood."
           />
         ) : (
-          <View style={styles.board}>
-            {boardColumns.map((column, columnIndex) => (
-              <View key={`column-${columnIndex}`} style={styles.column}>
-                {column.map((watchlist) => {
-                  const previewFilms = getFilmsByTmdbIds(watchlist.filmIds).slice(0, 4);
-                  const aesthetics = Array.from(
-                    new Set(
-                      previewFilms.flatMap((film) => film.genres).filter((genre) => genre !== "Series"),
-                    ),
-                  ).slice(0, 3);
-
-                  return (
-                    <WatchlistNoteCard
-                      key={watchlist.id}
-                      watchlist={watchlist}
-                      previewFilms={previewFilms}
-                      aesthetics={aesthetics}
-                      onOpen={() => openWatchlist(watchlist.id)}
-                    />
-                  );
-                })}
+          <>
+            {watchlists.length === 1 ? (
+              <View style={styles.suggestionCard}>
+                <Text style={styles.suggestionTitle}>Build a second lane</Text>
+                <Text style={styles.suggestionText}>
+                  Create another watchlist for a different mood so recommendations can separate your tastes.
+                </Text>
+                <View style={styles.suggestionChips}>
+                  {["Horror nights", "Date movies", "Anime queue"].map((suggestion) => (
+                    <Pressable
+                      key={suggestion}
+                      onPress={() => {
+                        setName(suggestion);
+                        setDescription(`A watchlist for ${suggestion.toLowerCase()}.`);
+                        setShowCreateModal(true);
+                      }}
+                      style={({ pressed }) => [
+                        styles.suggestionChip,
+                        pressed && styles.suggestionChipPressed,
+                      ]}
+                    >
+                      <Text style={styles.suggestionChipText}>{suggestion}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-            ))}
-          </View>
+            ) : null}
+            <View style={styles.board}>
+              {boardColumns.map((column, columnIndex) => (
+                <View key={`column-${columnIndex}`} style={styles.column}>
+                  {column.map((watchlist) => {
+                    const previewFilms = getFilmsByTmdbIds(watchlist.filmIds).slice(0, 4);
+                    const aesthetics = Array.from(
+                      new Set(
+                        previewFilms.flatMap((film) => film.genres).filter((genre) => genre !== "Series"),
+                      ),
+                    ).slice(0, 3);
+
+                    return (
+                      <WatchlistNoteCard
+                        key={watchlist.id}
+                        watchlist={watchlist}
+                        previewFilms={previewFilms}
+                        aesthetics={aesthetics}
+                        onOpen={() => openWatchlist(watchlist.id)}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </>
         )}
       </View>
 
@@ -220,6 +248,45 @@ const styles = StyleSheet.create({
   column: {
     flex: 1,
     gap: SPACING.sm,
+  },
+  suggestionCard: {
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.accent.iceBlue, 0.24),
+    borderRadius: BORDER_RADIUS.card,
+    backgroundColor: withOpacity(COLORS.accent.iceBlue, 0.08),
+    padding: SPACING.padding.card,
+    gap: SPACING.sm,
+  },
+  suggestionTitle: {
+    color: COLORS.foreground.primary,
+    fontSize: TYPOGRAPHY.fontSize.md,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
+  suggestionText: {
+    color: COLORS.foreground.secondary,
+    fontSize: TYPOGRAPHY.fontSize.sm,
+    lineHeight: TYPOGRAPHY.lineHeight.normal,
+  },
+  suggestionChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+  },
+  suggestionChip: {
+    borderWidth: 1,
+    borderColor: withOpacity(COLORS.accent.iceBlue, 0.34),
+    borderRadius: BORDER_RADIUS.pill,
+    backgroundColor: withOpacity(COLORS.background.subtle, 0.72),
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  suggestionChipPressed: {
+    opacity: 0.85,
+  },
+  suggestionChipText: {
+    color: COLORS.accent.crystal,
+    fontSize: TYPOGRAPHY.fontSize.xs,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   modalBackdrop: {
     flex: 1,
